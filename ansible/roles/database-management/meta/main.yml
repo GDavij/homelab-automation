@@ -1,0 +1,11 @@
+---
+# Role dependencies for database-management
+# Ensures Docker runtime and networking infrastructure are ready before deploying PostgreSQL
+
+dependencies:
+  - role: docker
+    tags:
+      - always
+  - role: networking
+    tags:
+      - always

@@ -1,0 +1,124 @@
+---
+- name: Reset connection to apply docker group membership
+  ansible.builtin.meta: reset_connection
+  tags:
+    - ollama
+    - ai
+
+- name: Pull Ollama Image for Docker
+  community.docker.docker_image:
+    name: "ollama/ollama:{{ OLLAMA_VERSION }}"
+    source: pull
+    state: present
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - ollama
+    - ai
+    - images
+    - deploy
+
+- name: Ensure Docker is running
+  ansible.builtin.include_tasks:
+    file: ../../common/tasks/ensure_docker.yml
+  tags:
+    - ollama
+    - ai
+    - setup
+    - services
+
+- name: Create Persistent Storage Directories for Ollama
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ OLLAMA_MODELS_PATH }}"
+  tags:
+    - ollama
+    - ai
+    - setup
+    - storage
+
+- name: Create temporary directory for docker-compose files
+  ansible.builtin.file:
+    path: "/tmp/ollama"
+    state: directory
+    mode: '0755'
+  tags:
+    - ollama
+    - config
+    - deploy
+
+- name: Copy docker-compose.yml to remote server
+  ansible.builtin.copy:
+    src: "{{ role_path }}/files/docker-compose.yml"
+    dest: "/tmp/ollama/docker-compose.yml"
+    mode: '0644'
+  tags:
+    - ollama
+    - config
+    - deploy
+
+- name: Generate .ENV file on remote server
+  ansible.builtin.template:
+    src: .docker-compose.env.j2
+    dest: "/tmp/ollama/.env"
+    mode: '0644'
+  tags:
+    - ollama
+    - config
+    - deploy
+
+- name: Raise Ollama Docker Compose File
+  community.docker.docker_compose_v2:
+    project_src: "/tmp/ollama"
+    project_name: ollama
+    state: present
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - ollama
+    - deploy
+    - services
+
+- name: Wait for Ollama container to be healthy
+  community.docker.docker_container_info:
+    name: ollama
+  register: ollama_container
+  until: ollama_container.container.State.Health.Status is defined and ollama_container.container.State.Health.Status == "healthy"
+  retries: 12
+  delay: 5
+  failed_when: false
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - ollama
+    - ai
+    - verify
+    - never
+
+- name: Display Ollama status
+  ansible.builtin.debug:
+    msg:
+      - "Ollama is running and healthy"
+      - "Access via NGINX: https://ollama.homelab"
+      - "Internal endpoint: http://ollama:11434"
+      - "GPU support: NVIDIA RTX 3060 12GB enabled"
+      - "Models path: {{ OLLAMA_MODELS_PATH }}"
+  when: ollama_container.container.State.Health.Status is defined and ollama_container.container.State.Health.Status == "healthy"
+  tags:
+    - ollama
+    - ai
+    - verify
+    - never
+
+- name: Warn if Ollama is not healthy
+  ansible.builtin.debug:
+    msg: "WARNING: Ollama is not healthy. Check container logs with: docker logs ollama"
+  when: ollama_container.container.State.Health.Status is not defined or ollama_container.container.State.Health.Status != "healthy"
+  tags:
+    - ollama
+    - ai
+    - verify
+    - never

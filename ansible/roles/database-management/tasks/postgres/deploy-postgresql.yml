@@ -1,0 +1,121 @@
+---
+# ==============================================================================
+# PostgreSQL deployment tasks
+# ==============================================================================
+
+- name: Ensure Docker is running
+  ansible.builtin.include_tasks:
+    file: ../../common/tasks/ensure_docker.yml
+
+- name: Pull PostgreSQL container image
+  community.docker.docker_image:
+    name: "{{ POSTGRESQL_IMAGE }}"
+    source: pull
+    state: present
+  become: true
+  become_user: "{{ ansible_user_id }}"
+
+- name: Pull pgAdmin container image
+  community.docker.docker_image:
+    name: "{{ PGADMIN_IMAGE }}"
+    source: pull
+    state: present
+  when: PGADMIN_ENABLED | bool
+  become: true
+  become_user: "{{ ansible_user_id }}"
+
+- name: Create docker-compose project directory
+  ansible.builtin.file:
+    path: "{{ DATABASE_MANAGEMENT_PROJECT_DIR }}"
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Deploy docker-compose.yml
+  ansible.builtin.copy:
+    src: "{{ role_path }}/files/docker-compose.yml"
+    dest: "{{ DATABASE_MANAGEMENT_PROJECT_DIR }}/docker-compose.yml"
+    mode: '0644'
+  become: true
+
+- name: Template main environment file
+  ansible.builtin.template:
+    src: postgres/.env.j2
+    dest: "{{ DATABASE_MANAGEMENT_PROJECT_DIR }}/{{ DATABASE_MANAGEMENT_ENV_FILE }}"
+    mode: '0600'
+  become: true
+
+- name: Template PostgreSQL environment file
+  ansible.builtin.template:
+    src: postgres/.postgresql.env.j2
+    dest: "{{ DATABASE_MANAGEMENT_PROJECT_DIR }}/{{ DATABASE_MANAGEMENT_POSTGRES_ENV_FILE }}"
+    mode: '0600'
+  become: true
+
+- name: Template pgAdmin environment file
+  ansible.builtin.template:
+    src: postgres/.pgadmin.env.j2
+    dest: "{{ DATABASE_MANAGEMENT_PROJECT_DIR }}/{{ DATABASE_MANAGEMENT_PGADMIN_ENV_FILE }}"
+    mode: '0600'
+  when: PGADMIN_ENABLED | bool
+  become: true
+
+- name: Deploy PostgreSQL configuration files
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: '0640'
+  loop:
+    - { src: 'postgres/postgresql.conf.j2', dest: "{{ POSTGRESQL_CONF_PATH }}/postgresql.conf" }
+    - { src: 'postgres/pg_hba.conf.j2', dest: "{{ POSTGRESQL_CONF_PATH }}/pg_hba.conf" }
+  become: true
+  notify: Restart PostgreSQL stack
+
+- name: Deploy SQL initialization scripts
+  ansible.builtin.template:
+    src: "postgres/{{ item }}"
+    dest: "{{ POSTGRESQL_INIT_PATH }}/{{ item | basename | regex_replace('\\.j2$', '') }}"
+    mode: '0640'
+  loop:
+    - 01-enable-extensions.sql.j2
+    - 02-create-admin-role.sql.j2
+    - 03-create-users.sql.j2
+    - 04-create-databases.sql.j2
+    - 05-setup-database-extensions.sql.j2
+    - 06-grant-permissions.sql.j2
+    - 07-pgvector-examples.sql.j2
+    - 08-audit-log.sql.j2
+  become: true
+
+- name: Launch PostgreSQL stack with docker compose
+  community.docker.docker_compose_v2:
+    project_src: "{{ DATABASE_MANAGEMENT_PROJECT_DIR }}"
+    project_name: database_management
+    profiles: "{{ ['pgadmin'] if PGADMIN_ENABLED | default(false) else [] }}"
+    state: present
+    pull: policy
+    recreate: auto
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  register: database_compose_result
+
+- name: Wait for PostgreSQL container health check
+  community.docker.docker_container_info:
+    name: postgresql
+  register: postgresql_container_info
+  until: >
+    postgresql_container_info.container.State.Health.Status is defined and
+    postgresql_container_info.container.State.Health.Status == "healthy"
+  retries: "{{ DATABASE_MANAGEMENT_HEALTHCHECK_RETRIES | int }}"
+  delay: "{{ DATABASE_MANAGEMENT_HEALTHCHECK_DELAY | int }}"
+  failed_when: false
+  become: true
+  become_user: "{{ ansible_user_id }}"
+
+- name: Display PostgreSQL deployment status
+  ansible.builtin.debug:
+    msg:
+      - "PostgreSQL Status: {{ postgresql_container_info.container.State.Health.Status | default('unknown') }}"
+      - "Tailnet Access: postgresql://{{ TAILSCALE_IP_ADDRESS }}:{{ POSTGRESQL_PORT }}"
+      - "Internal Access: postgresql://postgresql:{{ POSTGRESQL_PORT }}"
+  when: postgresql_container_info.exists | default(false)

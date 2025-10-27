@@ -1,0 +1,119 @@
+---
+- name: Reset connection to apply docker group membership
+  ansible.builtin.meta: reset_connection
+  tags:
+    - nginx
+
+- name: Pull NGINX Proxy Manager Image for Docker
+  community.docker.docker_image:
+    name: "jc21/nginx-proxy-manager:{{ NGINX_PROXY_MANAGER_VERSION }}"
+    source: pull
+    state: present
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - nginx
+    - images
+    - deploy
+
+- name: Ensure Docker is running
+  ansible.builtin.include_tasks:
+    file: ../../common/tasks/ensure_docker.yml
+  tags:
+    - nginx
+    - setup
+    - services
+
+- name: Create Persistent Storage Directories for NGINX Proxy Manager
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ NGINX_MANAGER_DATA_STORE_PATH }}"
+    - "{{ NGINX_MANAGER_CERTIFICATES_STORE_PATH }}"
+  tags:
+    - nginx
+    - setup
+    - storage
+
+- name: Create temporary directory for docker-compose files
+  ansible.builtin.file:
+    path: "/tmp/nginx-proxy-manager"
+    state: directory
+    mode: '0755'
+  tags:
+    - nginx
+    - config
+    - deploy
+
+- name: Copy docker-compose.yml to remote server
+  ansible.builtin.copy:
+    src: "{{ role_path }}/files/docker-compose.yml"
+    dest: "/tmp/nginx-proxy-manager/docker-compose.yml"
+    mode: '0644'
+  tags:
+    - nginx
+    - config
+    - deploy
+
+- name: Generate .ENV file on remote server
+  ansible.builtin.template:
+    src: .docker-compose.env.j2
+    dest: "/tmp/nginx-proxy-manager/.env"
+    mode: '0644'
+  tags:
+    - nginx
+    - config
+    - deploy
+
+- name: Raise NGINX Proxy Manager Docker Compose File
+  community.docker.docker_compose_v2:
+    project_src: "/tmp/nginx-proxy-manager"
+    project_name: nginx_proxy_manager
+    state: present
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - nginx
+    - deploy
+    - services
+    - services
+
+- name: Wait for NGINX Proxy Manager container to be healthy
+  community.docker.docker_container_info:
+    name: nginx-proxy-manager
+  register: nginx_container
+  until: nginx_container.container.State.Health.Status is defined and nginx_container.container.State.Health.Status == "healthy"
+  retries: 12
+  delay: 5
+  failed_when: false
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - nginx
+    - verify
+    - never
+
+- name: Display NGINX Proxy Manager status
+  ansible.builtin.debug:
+    msg:
+      - "NGINX Proxy Manager is running and healthy"
+      - "Admin interface: http://{{ TAILSCALE_IP_ADDRESS }}:81"
+      - "Default credentials - Email: admin@example.com, Password: changeme"
+      - "HTTP: http://{{ TAILSCALE_IP_ADDRESS }}:80"
+      - "HTTPS: https://{{ TAILSCALE_IP_ADDRESS }}:443"
+  when: nginx_container.container.State.Health.Status is defined and nginx_container.container.State.Health.Status == "healthy"
+  tags:
+    - nginx
+    - verify
+    - never
+
+- name: Warn if NGINX Proxy Manager is not healthy
+  ansible.builtin.debug:
+    msg: "WARNING: NGINX Proxy Manager is not healthy. Check container logs with: docker logs nginx-proxy-manager"
+  when: nginx_container.container.State.Health.Status is not defined or nginx_container.container.State.Health.Status != "healthy"
+  tags:
+    - nginx
+    - verify
+    - never

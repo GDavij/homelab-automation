@@ -1,0 +1,90 @@
+-- ==============================================================================
+-- Audit log table setup
+-- ==============================================================================
+
+{% for database in POSTGRES_DATABASES %}
+{% if database.enable_audit_log | default(false) %}
+\c "{{ database.name }}"
+
+-- Create audit log table
+CREATE TABLE IF NOT EXISTS audit_log (
+    id SERIAL PRIMARY KEY,
+    event_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    username TEXT NOT NULL,
+    database_name TEXT NOT NULL,
+    schema_name TEXT,
+    table_name TEXT,
+    action TEXT NOT NULL,  -- INSERT, UPDATE, DELETE, etc.
+    object_type TEXT,      -- TABLE, FUNCTION, SCHEMA, etc.
+    object_name TEXT,
+    query TEXT,
+    ip_address INET,
+    application_name TEXT,
+    client_hostname TEXT,
+    success BOOLEAN DEFAULT true,
+    error_message TEXT
+);
+
+COMMENT ON TABLE audit_log IS 'Database audit trail for security and compliance';
+COMMENT ON COLUMN audit_log.action IS 'DDL/DML action: CREATE, ALTER, DROP, INSERT, UPDATE, DELETE, TRUNCATE, GRANT, REVOKE';
+COMMENT ON COLUMN audit_log.query IS 'SQL query text (can be truncated for large queries)';
+
+-- Create indexes for efficient querying
+CREATE INDEX IF NOT EXISTS idx_audit_log_event_time ON audit_log(event_time DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_log_username ON audit_log(username);
+CREATE INDEX IF NOT EXISTS idx_audit_log_table_name ON audit_log(table_name);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
+CREATE INDEX IF NOT EXISTS idx_audit_log_time_user ON audit_log(event_time DESC, username);
+
+-- Grant permissions for audit logging
+GRANT INSERT, SELECT ON audit_log TO {{ database.owner | default('postgres') }};
+{% for user in database.allowed_users | default([]) %}
+GRANT INSERT, SELECT ON audit_log TO "{{ user }}";
+{% endfor %}
+
+-- Grant read-only access to audit log for readonly users
+{% for user in database.readonly_users | default([]) %}
+GRANT SELECT ON audit_log TO "{{ user }}";
+{% endfor %}
+
+-- Grant sequence usage
+GRANT USAGE, SELECT ON SEQUENCE audit_log_id_seq TO {{ database.owner | default('postgres') }};
+{% for user in database.allowed_users | default([]) %}
+GRANT USAGE, SELECT ON SEQUENCE audit_log_id_seq TO "{{ user }}";
+{% endfor %}
+
+-- Example audit trigger function (commented out - enable per table as needed)
+/*
+CREATE OR REPLACE FUNCTION audit_trigger_func()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        INSERT INTO audit_log (username, database_name, schema_name, table_name, action, object_type)
+        VALUES (current_user, current_database(), TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_OP, 'TABLE');
+        RETURN OLD;
+    ELSIF TG_OP = 'UPDATE' THEN
+        INSERT INTO audit_log (username, database_name, schema_name, table_name, action, object_type)
+        VALUES (current_user, current_database(), TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_OP, 'TABLE');
+        RETURN NEW;
+    ELSIF TG_OP = 'INSERT' THEN
+        INSERT INTO audit_log (username, database_name, schema_name, table_name, action, object_type)
+        VALUES (current_user, current_database(), TG_TABLE_SCHEMA, TG_TABLE_NAME, TG_OP, 'TABLE');
+        RETURN NEW;
+    END IF;
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Apply trigger to specific tables:
+-- CREATE TRIGGER audit_trigger
+-- AFTER INSERT OR UPDATE OR DELETE ON your_table
+-- FOR EACH ROW EXECUTE FUNCTION audit_trigger_func();
+*/
+
+{% endif %}
+{% endfor %}
+
+-- Return to postgres database
+\c postgres
+
+SELECT 'Audit log configured successfully' AS status;

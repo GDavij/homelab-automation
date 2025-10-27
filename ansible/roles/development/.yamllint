@@ -1,0 +1,10 @@
+---
+# YAML Lint Configuration for Development Role
+extends: default
+
+rules:
+  line-length:
+    max: 160  # Match ansible-lint default
+    level: warning
+  comments:
+    min-spaces-from-content: 1

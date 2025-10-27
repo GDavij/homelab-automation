@@ -1,0 +1,37 @@
+-- ==============================================================================
+-- Application user creation
+-- ==============================================================================
+
+{% for user in POSTGRES_DATABASE_USERS %}
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{{ user.username }}') THEN
+        CREATE ROLE "{{ user.username }}" WITH
+            LOGIN
+            PASSWORD '{{ user.password | replace("'", "''") }}'
+            {{ 'CREATEDB' if user.createdb | default(false) else 'NOCREATEDB' }}
+            NOCREATEROLE
+            NOREPLICATION
+            NOBYPASSRLS
+            CONNECTION LIMIT {{ user.connection_limit | default(-1) }};
+        
+        {% if user.description is defined %}
+        COMMENT ON ROLE "{{ user.username }}" IS '{{ user.description | replace("'", "''") }}';
+        {% endif %}
+        
+        RAISE NOTICE 'Created user: {{ user.username }}';
+    ELSE
+        -- Update password and limits if user exists
+        ALTER ROLE "{{ user.username }}" WITH
+            PASSWORD '{{ user.password | replace("'", "''") }}'
+            {{ 'CREATEDB' if user.createdb | default(false) else 'NOCREATEDB' }}
+            CONNECTION LIMIT {{ user.connection_limit | default(-1) }};
+        
+        RAISE NOTICE 'Updated user: {{ user.username }}';
+    END IF;
+END
+$$;
+
+{% endfor %}
+
+SELECT 'Application users configured successfully' AS status;

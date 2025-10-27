@@ -1,0 +1,12 @@
+---
+# ==============================================================================
+# Handlers for database-management role
+# ==============================================================================
+
+- name: Restart PostgreSQL stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ DATABASE_MANAGEMENT_PROJECT_DIR }}"
+    project_name: database_management
+    state: restarted
+  become: true
+  become_user: "{{ ansible_user_id }}"

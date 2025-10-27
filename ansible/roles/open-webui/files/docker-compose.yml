@@ -1,0 +1,33 @@
+# roles/open-webui/files/docker-compose.yml
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:latest
+    container_name: open-webui
+    restart: unless-stopped
+    
+    # NO port binding - internal network only
+    expose:
+      - 3000
+    
+    volumes:
+      # Persistent storage for user data and chats
+      - '${OPEN_WEBUI_DATA_PATH}:/app/backend/data'
+    
+    environment:
+      # Connect to Ollama via internal Docker network
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-change-this-in-production}
+      - ENABLE_SIGNUP=true
+    
+    # DNS Configuration - Use Pi-hole for DNS resolution
+    dns:
+      - 172.18.0.10  # Pi-hole
+      - 8.8.8.8      # Fallback to Google DNS
+    
+    # Attach to self-hosted network for internal communication
+    networks:
+      - self-hosted
+
+networks:
+  self-hosted:
+    external: true

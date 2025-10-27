@@ -1,0 +1,142 @@
+---
+# ==============================================================================
+# Node.js - Post-installation Verification
+# ==============================================================================
+# Verify nvm, Node.js, npm, and PNPM installation and functionality
+# ==============================================================================
+
+- name: Test nvm command
+  ansible.builtin.shell: |
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    nvm --version
+  args:
+    executable: /bin/bash
+  register: nvm_version
+  changed_when: false
+  tags:
+    - nodejs
+    - verify
+
+- name: Test Node.js command
+  ansible.builtin.shell: |
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    node -v
+  args:
+    executable: /bin/bash
+  register: node_version
+  changed_when: false
+  tags:
+    - nodejs
+    - verify
+
+- name: Test npm command
+  ansible.builtin.shell: |
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    npm -v
+  args:
+    executable: /bin/bash
+  register: npm_version
+  changed_when: false
+  tags:
+    - nodejs
+    - verify
+
+- name: Test PNPM command
+  ansible.builtin.shell: |
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    pnpm -v
+  args:
+    executable: /bin/bash
+  register: pnpm_version
+  changed_when: false
+  tags:
+    - nodejs
+    - verify
+
+- name: Test Node.js can run code
+  ansible.builtin.shell: |
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    node -e "console.log('OK')"
+  args:
+    executable: /bin/bash
+  register: node_exec_test
+  changed_when: false
+  failed_when: node_exec_test.stdout != "OK"
+  tags:
+    - nodejs
+    - verify
+
+- name: Test npm can list global packages
+  ansible.builtin.shell: |
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    npm list -g --depth=0
+  args:
+    executable: /bin/bash
+  register: npm_list_test
+  changed_when: false
+  failed_when: npm_list_test.rc != 0
+  tags:
+    - nodejs
+    - verify
+
+- name: Test PNPM can list global packages
+  ansible.builtin.shell: |
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    pnpm list -g
+  args:
+    executable: /bin/bash
+  register: pnpm_list_test
+  changed_when: false
+  failed_when: false  # Allow to fail if no global packages installed yet
+  tags:
+    - nodejs
+    - verify
+
+- name: Extract Node.js version number
+  ansible.builtin.set_fact:
+    nodejs_version_installed: "{{ node_version.stdout | regex_replace('^v', '') }}"
+  tags:
+    - nodejs
+    - verify
+
+- name: Verify Node.js version is v22.x
+  ansible.builtin.assert:
+    that:
+      - nodejs_version_installed is version('22.0.0', '>=')
+      - nodejs_version_installed is version('23.0.0', '<')
+    fail_msg: "Node.js version {{ nodejs_version_installed }} is not v22.x LTS"
+    success_msg: "✅ Node.js version {{ nodejs_version_installed }} is v22.x LTS"
+  tags:
+    - nodejs
+    - verify
+
+- name: Verify Node.js meets minimum version requirement
+  ansible.builtin.assert:
+    that:
+      - nodejs_version_installed is version(NODEJS_MIN_VERSION, '>=')
+    fail_msg: "Node.js version {{ nodejs_version_installed }} is below minimum required version {{ NODEJS_MIN_VERSION }}"
+    success_msg: "✅ Node.js version {{ nodejs_version_installed }} meets requirements (>= {{ NODEJS_MIN_VERSION }})"
+  tags:
+    - nodejs
+    - verify
+
+- name: Display Node.js installation summary
+  ansible.builtin.debug:
+    msg:
+      - "=========================================="
+      - "Node.js Installation Verification"
+      - "=========================================="
+      - "nvm Version: {{ nvm_version.stdout }}"
+      - "Node.js Version: {{ node_version.stdout }}"
+      - "npm Version: {{ npm_version.stdout }}"
+      - "PNPM Version: {{ pnpm_version.stdout }}"
+      - "Execution Test: ✅ PASSED"
+      - "npm list Test: ✅ PASSED"
+      - "Status: ✅ Node.js development environment ready"
+      - ""
+      - "⚠️  Remember: Source nvm before using Node.js"
+      - "   source ~/.nvm/nvm.sh"
+      - "=========================================="
+  tags:
+    - nodejs
+    - verify

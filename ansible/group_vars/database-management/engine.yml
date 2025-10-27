@@ -1,0 +1,28 @@
+---
+# ==============================================================================
+# Database Management Role - Engine Selection
+# ==============================================================================
+# Select which database engine to deploy
+# See: docs/ENVIRONMENT_VARIABLES.md#database-management-role
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Engine Selection
+# ------------------------------------------------------------------------------
+# Choose which database engine to deploy
+# Options: postgres, sqlserver (future), oracle (future)
+DATABASE_ENGINE: "postgres"
+
+
+# ==============================================================================
+# Sub-Role Configuration
+# ==============================================================================
+# Configure the selected engine in its sub-role folder:
+#
+# - PostgreSQL: database-management/postgres/vars.yml + secrets.yml
+# - pgAdmin:    database-management/pgadmin/vars.yml + secrets.yml
+# - SQL Server: database-management/sqlserver/vars.yml (future)
+# - Oracle:     database-management/oracle/vars.yml (future)
+#
+# See: docs/POSTGRES_DATABASE_MANAGEMENT.md for PostgreSQL guide
+# ==============================================================================

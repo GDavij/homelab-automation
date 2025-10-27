@@ -1,0 +1,11 @@
+---
+# Networking handlers
+- name: Reload firewalld
+  ansible.builtin.service:
+    name: firewalld
+    state: reloaded
+
+- name: restart firewalld
+  ansible.builtin.service:
+    name: firewalld
+    state: restarted

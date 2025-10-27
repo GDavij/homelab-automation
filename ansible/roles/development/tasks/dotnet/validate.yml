@@ -1,0 +1,57 @@
+---
+# ==============================================================================
+# .NET SDK - Pre-installation Validation
+# ==============================================================================
+# Check if .NET SDK is already installed
+# ==============================================================================
+
+- name: Check if .NET SDK is installed
+  ansible.builtin.command: dotnet --version
+  register: dotnet_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - dotnet
+    - validate
+
+- name: Display current .NET SDK version if found
+  ansible.builtin.debug:
+    msg: "✅ .NET SDK already installed: {{ dotnet_check.stdout }}"
+  when: dotnet_check.rc == 0
+  tags:
+    - dotnet
+    - validate
+
+- name: Check .NET SDK list if installed
+  ansible.builtin.command: dotnet --list-sdks
+  register: dotnet_sdks_list
+  failed_when: false
+  changed_when: false
+  when: dotnet_check.rc == 0
+  tags:
+    - dotnet
+    - validate
+
+- name: Display installed .NET SDKs
+  ansible.builtin.debug:
+    msg: "Installed .NET SDKs:\n{{ dotnet_sdks_list.stdout }}"
+  when:
+    - dotnet_check.rc == 0
+    - dotnet_sdks_list.stdout | length > 0
+  tags:
+    - dotnet
+    - validate
+
+- name: Set fact for .NET SDK installation requirement
+  ansible.builtin.set_fact:
+    dotnet_needs_installation: "{{ dotnet_check.rc != 0 }}"
+  tags:
+    - dotnet
+    - validate
+
+- name: Display installation decision
+  ansible.builtin.debug:
+    msg: "{{ 'ℹ️  .NET SDK installation needed' if dotnet_needs_installation else '✅ .NET SDK already installed - skipping installation' }}"
+  tags:
+    - dotnet
+    - validate

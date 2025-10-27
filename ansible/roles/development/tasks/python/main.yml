@@ -1,0 +1,25 @@
+---
+# ==============================================================================
+# Python Development Stack Tasks
+# ==============================================================================
+# This file orchestrates all Python-specific deployment tasks.
+# ==============================================================================
+
+- name: Validate Python prerequisites and configuration
+  ansible.builtin.include_tasks: validate.yml
+  tags:
+    - python
+    - validate
+
+- name: Install Python and development tools
+  ansible.builtin.include_tasks: install.yml
+  when: python_needs_installation | default(true)
+  tags:
+    - python
+    - install
+
+- name: Verify Python installation
+  ansible.builtin.include_tasks: verify.yml
+  tags:
+    - python
+    - verify

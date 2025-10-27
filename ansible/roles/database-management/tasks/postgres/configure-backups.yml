@@ -1,0 +1,31 @@
+---
+# ==============================================================================
+# PostgreSQL backup configuration tasks
+# ==============================================================================
+
+- name: Deploy PostgreSQL backup script
+  ansible.builtin.template:
+    src: postgres/backup-script.sh.j2
+    dest: "{{ DATABASE_MANAGEMENT_BACKUP_SCRIPT }}"
+    mode: '0750'
+    owner: root
+    group: root
+  become: true
+
+- name: Schedule automated PostgreSQL backups via cron
+  ansible.builtin.cron:
+    name: "PostgreSQL automated backup"
+    minute: "{{ POSTGRES_BACKUP_CRON_MINUTE }}"
+    hour: "{{ POSTGRES_BACKUP_CRON_HOUR }}"
+    user: "{{ POSTGRES_BACKUP_CRON_USER }}"
+    job: "{{ DATABASE_MANAGEMENT_BACKUP_SCRIPT }} >> {{ POSTGRESQL_BACKUP_PATH }}/backup.log 2>&1"
+    state: present
+  become: true
+
+- name: Display PostgreSQL backup configuration
+  ansible.builtin.debug:
+    msg:
+      - "PostgreSQL Backup Schedule: Daily at {{ POSTGRES_BACKUP_CRON_HOUR }}:{{ POSTGRES_BACKUP_CRON_MINUTE }}"
+      - "Backup Location: {{ POSTGRESQL_BACKUP_PATH }}"
+      - "Retention: {{ POSTGRES_BACKUP_RETENTION_DAYS }}d / {{ POSTGRES_BACKUP_RETENTION_WEEKS }}w / {{ POSTGRES_BACKUP_RETENTION_MONTHS }}m"
+      - "Encryption: {{ 'Enabled' if POSTGRES_BACKUP_ENCRYPTION | default(false) | bool else 'Disabled' }}"

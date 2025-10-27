@@ -1,0 +1,54 @@
+---
+# ==============================================================================
+# Python - Pre-installation Validation
+# ==============================================================================
+# Check if Python is already installed and set facts for conditional installation
+# ==============================================================================
+
+- name: Check if Python 3 is installed
+  ansible.builtin.command: python3 --version
+  register: python3_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - python
+    - validate
+
+- name: Check if pip3 is installed
+  ansible.builtin.command: pip3 --version
+  register: pip3_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - python
+    - validate
+
+- name: Display current Python version if found
+  ansible.builtin.debug:
+    msg: "✅ Python already installed: {{ python3_check.stdout }}"
+  when: python3_check.rc == 0
+  tags:
+    - python
+    - validate
+
+- name: Display current pip version if found
+  ansible.builtin.debug:
+    msg: "✅ pip already installed: {{ pip3_check.stdout }}"
+  when: pip3_check.rc == 0
+  tags:
+    - python
+    - validate
+
+- name: Set fact for Python installation requirement
+  ansible.builtin.set_fact:
+    python_needs_installation: "{{ python3_check.rc != 0 or pip3_check.rc != 0 }}"
+  tags:
+    - python
+    - validate
+
+- name: Display installation decision
+  ansible.builtin.debug:
+    msg: "{{ 'ℹ️  Python installation needed' if python_needs_installation else '✅ Python already installed - skipping installation' }}"
+  tags:
+    - python
+    - validate

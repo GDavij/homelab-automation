@@ -1,0 +1,45 @@
+---
+# ==============================================================================
+# Python - Installation
+# ==============================================================================
+# Install Python 3.x, pip, and development tools via DNF
+# ==============================================================================
+
+- name: Install Python packages via DNF
+  ansible.builtin.dnf:
+    name: "{{ PYTHON_PACKAGES }}"
+    state: present
+    update_cache: true
+  become: true
+  tags:
+    - python
+    - install
+
+- name: Upgrade pip to latest version
+  ansible.builtin.pip:
+    name: pip
+    state: present
+    extra_args: --upgrade
+    executable: pip3
+  become: true
+  tags:
+    - python
+    - install
+
+- name: Create python symlink to python3 (compatibility)
+  ansible.builtin.file:
+    src: /usr/bin/python3
+    dest: /usr/bin/python
+    state: link
+  become: true
+  failed_when: false
+  tags:
+    - python
+    - install
+
+- name: Display Python installation complete
+  ansible.builtin.debug:
+    msg: "✅ Python installation complete"
+  tags:
+    - python
+    - install

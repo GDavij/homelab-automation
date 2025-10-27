@@ -1,0 +1,29 @@
+---
+# ==============================================================================
+# Verification tasks
+# ==============================================================================
+
+- name: Get PostgreSQL container information
+  community.docker.docker_container_info:
+    name: postgresql
+  register: postgresql_verify_info
+  become: true
+  become_user: "{{ ansible_user_id }}"
+
+- name: Assert PostgreSQL container is running
+  ansible.builtin.assert:
+    that:
+      - postgresql_verify_info.exists | default(false)
+      - postgresql_verify_info.container.State.Status == "running"
+    fail_msg: "PostgreSQL container is not running"
+    success_msg: "PostgreSQL container is healthy and running"
+
+- name: Display connection endpoints
+  ansible.builtin.debug:
+    msg:
+      - "=== PostgreSQL Connection Information ==="
+      - "External (Tailnet): postgresql://{{ TAILSCALE_IP_ADDRESS }}:{{ POSTGRESQL_PORT }}"
+      - "Internal (Docker):  postgresql://postgresql:{{ POSTGRESQL_PORT }}"
+      - "Admin User: db_admin"
+      - "Application Users: {{ POSTGRES_DATABASE_USERS | map(attribute='username') | list | join(', ') }}"
+      - "Databases: {{ POSTGRES_DATABASES | map(attribute='name') | list | join(', ') }}"

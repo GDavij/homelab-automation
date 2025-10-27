@@ -1,0 +1,161 @@
+---
+- name: Reset connection to apply docker group membership
+  ansible.builtin.meta: reset_connection
+  tags:
+    - pihole
+
+- name: Pull PiHole Image for Docker
+  community.docker.docker_image:
+    name: "pihole/pihole:{{ PIHOLE_VERSION }}"
+    source: pull
+    state: present
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - pihole
+    - images
+    - deploy
+
+- name: Ensure Docker is running
+  ansible.builtin.include_tasks:
+    file: ../../common/tasks/ensure_docker.yml
+  tags:
+    - pihole
+    - setup
+    - services
+
+- name: Create Persistent Storage directories for Pi Hole
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ PI_HOLE_CONFIG_STORAGE_PATH }}"
+    - "{{ PI_HOLE_LOGS_STORAGE_PATH }}"
+  tags:
+    - pihole
+    - setup
+    - storage
+
+- name: Create temporary directory for docker-compose files
+  ansible.builtin.file:
+    path: "/tmp/pihole"
+    state: directory
+    mode: '0755'
+  tags:
+    - pihole
+    - config
+    - deploy
+
+- name: Copy docker-compose.yml to remote server
+  ansible.builtin.copy:
+    src: "{{ role_path }}/files/docker-compose.yml"
+    dest: "/tmp/pihole/docker-compose.yml"
+    mode: '0644'
+  tags:
+    - pihole
+    - config
+    - deploy
+
+- name: Generate .ENV file on remote server
+  ansible.builtin.template:
+    src: .docker-compose.env.j2
+    dest: "/tmp/pihole/.env"
+    mode: '0644'
+  tags:
+    - pihole
+    - config
+    - deploy
+
+- name: Raise Pihole Docker Compose File
+  community.docker.docker_compose_v2:
+    project_src: "/tmp/pihole"
+    project_name: pihole
+    state: present
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - pihole
+    - deploy
+    - services
+    - services
+
+- name: Wait for Pi-hole to start
+  ansible.builtin.pause:
+    seconds: 10
+  tags:
+    - pihole
+    - deploy
+
+- name: Create custom hosts file with homelab DNS entries
+  ansible.builtin.copy:
+    content: |
+      {{ TAILSCALE_IP_ADDRESS }} hole.homelab
+      {{ TAILSCALE_IP_ADDRESS }} cockpit.homelab
+      {{ TAILSCALE_IP_ADDRESS }} nginx.homelab
+      {{ TAILSCALE_IP_ADDRESS }} ollama.homelab
+      {{ TAILSCALE_IP_ADDRESS }} chat.homelab
+      {{ TAILSCALE_IP_ADDRESS }} comfy.homelab
+      {{ TAILSCALE_IP_ADDRESS }} pg.homelab
+    dest: "{{ PI_HOLE_CONFIG_STORAGE_PATH }}/custom-hosts"
+    mode: '0644'
+  tags:
+    - pihole
+    - dns
+    - deploy
+
+- name: Create dnsmasq configuration to read custom hosts file
+  ansible.builtin.copy:
+    content: |
+      addn-hosts=/etc/pihole/custom-hosts
+    dest: "{{ PI_HOLE_CONFIG_STORAGE_PATH }}/02-custom-hosts.conf"
+    mode: '0644'
+  notify: Restart Pi-hole
+  tags:
+    - pihole
+    - dns
+    - deploy
+
+- name: Wait for Pi-hole DNS to be responsive
+  ansible.builtin.wait_for:
+    host: "{{ TAILSCALE_IP_ADDRESS }}"
+    port: 53
+    timeout: 60
+  register: pihole_dns
+  failed_when: false
+  tags:
+    - pihole
+    - verify
+    - never
+
+- name: Test DNS resolution through Pi-hole
+  ansible.builtin.command: dig @{{ TAILSCALE_IP_ADDRESS }} google.com +short
+  register: dns_test
+  changed_when: false
+  failed_when: false
+  tags:
+    - pihole
+    - verify
+    - never
+
+- name: Display Pi-hole status
+  ansible.builtin.debug:
+    msg:
+      - "Pi-hole DNS is running on {{ TAILSCALE_IP_ADDRESS }}:53"
+      - "DNS test result: {{ dns_test.stdout_lines | default(['DNS test failed']) }}"
+      - "Web interface: http://{{ TAILSCALE_IP_ADDRESS }}/admin or http://hole.homelab/admin"
+      - "Custom DNS entries added: hole.homelab, cockpit.homelab, nginx.homelab, ollama.homelab, chat.homelab, comfy.homelab, pg.homelab"
+  when: pihole_dns is succeeded
+  tags:
+    - pihole
+    - verify
+    - never
+
+- name: Warn if Pi-hole is not accessible
+  ansible.builtin.debug:
+    msg: "WARNING: Pi-hole DNS did not respond. Check container logs with: docker logs pihole"
+  when: pihole_dns is failed
+  tags:
+    - pihole
+    - verify
+    - never

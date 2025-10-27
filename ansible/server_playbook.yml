@@ -1,0 +1,79 @@
+---
+- name: Server Playbook
+  hosts: homelab
+  become: true
+
+  roles:
+    # Pre-flight validation
+    - role: common
+      tags:
+        - always
+        - validate
+
+    # Infrastructure Setup
+    - role: docker
+      tags:
+        - docker
+        - infrastructure
+        - setup
+
+    - role: networking
+      tags:
+        - networking
+        - firewall
+        - infrastructure
+        - setup
+
+    # Service Deployments
+    - role: nginx-manager
+      tags:
+        - nginx
+        - services
+        - deploy
+
+    - role: pihole
+      tags:
+        - pihole
+        - services
+        - deploy
+
+    # Database Management
+    - role: database-management
+      tags:
+        - database
+        - database-management
+        - postgres
+        - services
+        - deploy
+
+    # Development Tools (Python, Node.js, .NET)
+    - role: development
+      tags:
+        - development
+        - dev-tools
+        - python
+        - nodejs
+        - dotnet
+        - setup
+
+    # AI Services (NVIDIA RTX 3060 12GB GPU)
+    - role: ollama
+      tags:
+        - ollama
+        - ai
+        - services
+        - deploy
+
+    - role: comfyui
+      tags:
+        - comfyui
+        - ai
+        - services
+        - deploy
+
+    - role: open-webui
+      tags:
+        - open-webui
+        - ai
+        - services
+        - deploy

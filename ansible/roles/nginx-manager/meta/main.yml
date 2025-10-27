@@ -1,0 +1,7 @@
+---
+# Role dependencies for nginx-manager
+# Ensures Docker and networking are configured before deploying NGINX Proxy Manager
+
+dependencies:
+  - role: docker
+  - role: networking

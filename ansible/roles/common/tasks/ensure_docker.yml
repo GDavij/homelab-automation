@@ -1,0 +1,13 @@
+---
+# Common task: Ensure Docker service is running
+# This task can be included by other roles to avoid duplication
+
+- name: Ensure Docker Service Is started
+  ansible.builtin.service:
+    name: docker.service
+    enabled: true
+    state: started
+  become: true
+  tags:
+    - docker
+    - services

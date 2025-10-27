@@ -1,0 +1,25 @@
+---
+# ==============================================================================
+# .NET SDK Development Stack Tasks
+# ==============================================================================
+# This file orchestrates all .NET SDK-specific deployment tasks.
+# ==============================================================================
+
+- name: Validate .NET SDK prerequisites and configuration
+  ansible.builtin.include_tasks: validate.yml
+  tags:
+    - dotnet
+    - validate
+
+- name: Install .NET SDK
+  ansible.builtin.include_tasks: install.yml
+  when: dotnet_needs_installation | default(true)
+  tags:
+    - dotnet
+    - install
+
+- name: Verify .NET SDK installation
+  ansible.builtin.include_tasks: verify.yml
+  tags:
+    - dotnet
+    - verify

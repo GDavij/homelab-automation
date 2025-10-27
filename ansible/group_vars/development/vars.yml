@@ -1,0 +1,51 @@
+---
+# ==============================================================================
+# Development Role Variables
+# ==============================================================================
+# Configuration for Python, Node.js, and .NET development environments
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Python Configuration
+# ------------------------------------------------------------------------------
+# Python is installed via Fedora DNF and managed by the system
+# Minimum version requirement
+PYTHON_MIN_VERSION: "3.9"
+
+# Python packages to install
+PYTHON_PACKAGES:
+  - python3
+  - python3-pip
+  - python3-devel
+  - python3-virtualenv
+  - python3-setuptools
+
+# ------------------------------------------------------------------------------
+# Node.js Configuration (via nvm)
+# ------------------------------------------------------------------------------
+# nvm (Node Version Manager) version
+NVM_VERSION: "0.40.3"
+NVM_INSTALL_URL: "https://raw.githubusercontent.com/nvm-sh/nvm/v{{ NVM_VERSION }}/install.sh"
+
+# Node.js version to install (LTS)
+NODEJS_VERSION: "22"  # v22.x LTS
+NODEJS_MIN_VERSION: "18.0.0"
+
+# PNPM is enabled via Corepack (built into Node.js)
+# No separate installation required
+
+# ------------------------------------------------------------------------------
+# .NET SDK Configuration
+# ------------------------------------------------------------------------------
+# .NET SDK version (available in Fedora repos)
+DOTNET_VERSION: "9.0"
+DOTNET_MIN_VERSION: "9.0.0"
+DOTNET_PACKAGE: "dotnet-sdk-{{ DOTNET_VERSION }}"
+
+# ------------------------------------------------------------------------------
+# Installation Control Flags
+# ------------------------------------------------------------------------------
+# Set to true to skip installation of specific tools
+DEVELOPMENT_SKIP_PYTHON: false
+DEVELOPMENT_SKIP_NODEJS: false
+DEVELOPMENT_SKIP_DOTNET: false

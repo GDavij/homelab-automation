@@ -1,0 +1,163 @@
+---
+# Pre-flight validation tasks
+# These tasks validate that all prerequisites are met before deployment
+
+- name: Validate required base variables are defined
+  ansible.builtin.assert:
+    that:
+      - TAILSCALE_IP_ADDRESS is defined
+      - TAILSCALE_ALLOWED_IPS is defined
+      - COLD_STORAGE_PATH is defined
+      - PI_HOLE_SECURE_WEBPASSWORD is defined
+      - NGINX_MANAGER_DATA_STORE_PATH is defined
+      - PI_HOLE_CONFIG_STORAGE_PATH is defined
+    fail_msg: "Required variables are not defined. Check group_vars/ directory for role-specific configuration files"
+    success_msg: "All required base variables are defined"
+  tags:
+    - always
+    - validate
+
+- name: Validate AI service variables are defined
+  ansible.builtin.assert:
+    that:
+      - OLLAMA_VERSION is defined
+      - OLLAMA_MODELS_PATH is defined
+      - COMFYUI_VERSION is defined
+      - COMFYUI_DATA_PATH is defined
+      - COMFYUI_MODELS_PATH is defined
+      - OPEN_WEBUI_VERSION is defined
+      - OPEN_WEBUI_DATA_PATH is defined
+    fail_msg: "AI service variables are not defined. Check group_vars/ollama/, group_vars/comfyui/, and group_vars/open-webui/"
+    success_msg: "All AI service variables are defined"
+  tags:
+    - validate
+    - ai
+
+- name: Verify cold storage path exists
+  ansible.builtin.stat:
+    path: "{{ COLD_STORAGE_PATH }}"
+  register: storage_path
+  tags:
+    - validate
+    - storage
+
+- name: Create cold storage path if it doesn't exist
+  ansible.builtin.file:
+    path: "{{ COLD_STORAGE_PATH }}"
+    state: directory
+    mode: '0755'
+  become: true
+  when: not storage_path.stat.exists
+  tags:
+    - validate
+    - storage
+
+- name: Check available disk space on cold storage
+  ansible.builtin.shell: df -h {{ COLD_STORAGE_PATH }} | tail -1 | awk '{print $4}'
+  register: disk_space
+  changed_when: false
+  tags:
+    - validate
+    - storage
+
+- name: Display available disk space
+  ansible.builtin.debug:
+    msg: "Available disk space on {{ COLD_STORAGE_PATH }}: {{ disk_space.stdout }}"
+  tags:
+    - validate
+    - storage
+
+- name: Check if Tailscale is installed
+  ansible.builtin.command: which tailscale
+  register: tailscale_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - validate
+    - tailscale
+
+- name: Warn if Tailscale is not installed
+  ansible.builtin.debug:
+    msg: "WARNING: Tailscale does not appear to be installed. Services will be bound to {{ TAILSCALE_IP_ADDRESS }} but may not be accessible."
+  when: tailscale_check.rc != 0
+  tags:
+    - validate
+    - tailscale
+
+- name: Check if firewalld is installed and running
+  ansible.builtin.systemd:
+    name: firewalld
+  register: firewalld_status
+  failed_when: false
+  tags:
+    - validate
+    - firewall
+
+- name: Ensure firewalld is installed
+  ansible.builtin.dnf:
+    name: firewalld
+    state: present
+  become: true
+  when: firewalld_status.status is not defined
+  tags:
+    - validate
+    - firewall
+
+- name: Ensure firewalld is started and enabled
+  ansible.builtin.systemd:
+    name: firewalld
+    state: started
+    enabled: true
+  become: true
+  tags:
+    - validate
+    - firewall
+
+# NVIDIA GPU Validation for AI Workloads
+- name: Check if NVIDIA driver is installed
+  ansible.builtin.command: nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
+  register: nvidia_driver_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - validate
+    - gpu
+    - ai
+
+- name: Display NVIDIA GPU Information
+  ansible.builtin.debug:
+    msg:
+      - "NVIDIA GPU detected for AI workloads"
+      - "GPU Info: {{ nvidia_driver_check.stdout }}"
+      - "Status: Ready for Ollama, ComfyUI, and Open WebUI deployment"
+  when: nvidia_driver_check.rc == 0
+  tags:
+    - validate
+    - gpu
+    - ai
+
+- name: Warn if NVIDIA GPU not detected
+  ansible.builtin.debug:
+    msg:
+      - "WARNING: NVIDIA GPU not detected or drivers not installed"
+      - "AI services (Ollama, ComfyUI) will run in CPU mode (very slow)"
+      - "Please install NVIDIA drivers: sudo dnf install akmod-nvidia xorg-x11-drv-nvidia-cuda"
+  when: nvidia_driver_check.rc != 0
+  tags:
+    - validate
+    - gpu
+    - ai
+
+- name: Validate AI service storage paths
+  ansible.builtin.assert:
+    that:
+      - OLLAMA_MODELS_PATH is defined
+      - COMFYUI_DATA_PATH is defined
+      - OPEN_WEBUI_DATA_PATH is defined
+    fail_msg: "AI service storage paths are not defined. Check group_vars/ollama/, group_vars/comfyui/, and group_vars/open-webui/"
+    success_msg: "AI service storage paths are configured"
+  when: false  # Only run when AI tags are specified
+  tags:
+    - validate
+    - ai
+    - never

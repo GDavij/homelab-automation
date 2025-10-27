@@ -1,0 +1,6 @@
+---
+# Role dependencies for networking
+# Ensures Docker is installed before configuring Docker networks
+
+dependencies:
+  - role: docker

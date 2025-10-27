@@ -1,0 +1,32 @@
+---
+# ==============================================================================
+# Database initialization tasks
+# ==============================================================================
+# These tasks apply SQL scripts to the running PostgreSQL container
+# Scripts are idempotent and can be re-run safely
+# ==============================================================================
+
+- name: Execute initialization SQL scripts
+  community.docker.docker_container_exec:
+    container: postgresql
+    command: "psql -U postgres -f /docker-entrypoint-initdb.d/{{ item }}"
+  loop:
+    - 01-enable-extensions.sql
+    - 02-create-admin-role.sql
+    - 03-create-users.sql
+    - 04-create-databases.sql
+    - 05-setup-database-extensions.sql
+    - 06-grant-permissions.sql
+    - 08-audit-log.sql
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  register: init_sql_results
+  changed_when: false
+
+- name: Log SQL initialization results
+  ansible.builtin.debug:
+    msg: "Executed {{ item.item }} - RC: {{ item.rc }}"
+  loop: "{{ init_sql_results.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: init_sql_results is defined

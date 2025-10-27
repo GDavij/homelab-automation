@@ -1,0 +1,31 @@
+-- ==============================================================================
+-- Admin role creation (separate from postgres superuser)
+-- ==============================================================================
+-- Creates {{ POSTGRES_ADMIN_USER }} role for day-to-day administration
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{{ POSTGRES_ADMIN_USER }}') THEN
+        CREATE ROLE {{ POSTGRES_ADMIN_USER }} WITH
+            LOGIN
+            PASSWORD '{{ POSTGRES_ADMIN_PASSWORD }}'
+            CREATEDB
+            CREATEROLE
+            REPLICATION
+            BYPASSRLS
+            CONNECTION LIMIT -1;
+        
+        COMMENT ON ROLE {{ POSTGRES_ADMIN_USER }} IS 'Administrative role for database management ({{ POSTGRES_ADMIN_EMAIL }})';
+        RAISE NOTICE 'Created {{ POSTGRES_ADMIN_USER }} role';
+    ELSE
+        -- Update password if role already exists
+        ALTER ROLE {{ POSTGRES_ADMIN_USER }} WITH PASSWORD '{{ POSTGRES_ADMIN_PASSWORD }}';
+        RAISE NOTICE 'Updated {{ POSTGRES_ADMIN_USER }} role password';
+    END IF;
+END
+$$;
+
+GRANT ALL PRIVILEGES ON DATABASE postgres TO {{ POSTGRES_ADMIN_USER }};
+GRANT ALL PRIVILEGES ON SCHEMA public TO {{ POSTGRES_ADMIN_USER }};
+
+SELECT 'Admin role configured successfully' AS status;

@@ -1,0 +1,17 @@
+---
+# Ansible Lint Configuration for Development Role
+# Overrides for project-specific patterns and justified exceptions
+
+# Command-instead-of-module exception:
+# nvm installation requires curl | bash pattern from official install script
+# This is the standard installation method documented by nvm maintainers
+# See: https://github.com/nvm-sh/nvm#install--update-script
+skip_list:
+  - command-instead-of-module  # nvm install requires curl | bash
+
+# Variable naming:
+# This project uses UPPERCASE for all user-configurable variables across all roles
+# (POSTGRES_*, PIHOLE_*, NGINX_*, OLLAMA_*, etc.)
+# Development role follows this established pattern
+warn_list:
+  - var-naming[pattern]

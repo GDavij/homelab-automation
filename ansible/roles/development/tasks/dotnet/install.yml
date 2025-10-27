@@ -1,0 +1,41 @@
+---
+# ==============================================================================
+# .NET SDK - Installation
+# ==============================================================================
+# Install .NET 9 SDK via Fedora DNF (available in default repos)
+# ==============================================================================
+
+- name: Install .NET SDK via DNF
+  ansible.builtin.dnf:
+    name: "{{ DOTNET_PACKAGE }}"
+    state: present
+    update_cache: true
+  become: true
+  tags:
+    - dotnet
+    - install
+
+- name: Configure .NET telemetry opt-out (privacy)
+  ansible.builtin.lineinfile:
+    path: "{{ ansible_env.HOME }}/.bashrc"
+    line: "export DOTNET_CLI_TELEMETRY_OPTOUT=1"
+    create: true
+    mode: '0644'
+    state: present
+  tags:
+    - dotnet
+    - install
+
+- name: Set DOTNET_CLI_TELEMETRY_OPTOUT for current session
+  ansible.builtin.set_fact:
+    ansible_env: "{{ ansible_env | combine({'DOTNET_CLI_TELEMETRY_OPTOUT': '1'}) }}"
+  tags:
+    - dotnet
+    - install
+
+- name: Display .NET SDK installation complete
+  ansible.builtin.debug:
+    msg: "✅ .NET SDK installation complete"
+  tags:
+    - dotnet
+    - install

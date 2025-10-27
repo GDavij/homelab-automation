@@ -1,0 +1,29 @@
+---
+# ==============================================================================
+# NGINX Proxy Manager Role - Variables
+# ==============================================================================
+# Reverse proxy with SSL/TLS management
+# Ports: 80 (HTTP), 443 (HTTPS), 81 (Admin UI)
+# See: docs/ENVIRONMENT_VARIABLES.md#nginx-proxy-manager-role
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Version Configuration
+# ------------------------------------------------------------------------------
+NGINX_PROXY_MANAGER_VERSION: "2"  # Docker image version
+
+# ------------------------------------------------------------------------------
+# Storage Configuration
+# ------------------------------------------------------------------------------
+NGINX_MANAGER_DATA_STORE_PATH: "{{ COLD_STORAGE_PATH }}/services/nginx-proxy/"
+NGINX_MANAGER_CERTIFICATES_STORE_PATH: "{{ COLD_STORAGE_PATH }}/services/nginx-proxy/certificates"
+
+
+# ==============================================================================
+# Service Information
+# ==============================================================================
+# - Admin UI: http://{{ TAILSCALE_IP_ADDRESS }}:81
+# - HTTP Port: 80 (public)
+# - HTTPS Port: 443 (public)
+# - Default credentials: admin@example.com / changeme (change on first login)
+# ==============================================================================

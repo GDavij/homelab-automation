@@ -1,0 +1,43 @@
+---
+# ==============================================================================
+# Storage setup tasks - Create persistent directories
+# ==============================================================================
+
+- name: Create PostgreSQL storage directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "{{ item.mode }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+  loop:
+    - { path: "{{ POSTGRESQL_DATA_PATH }}", mode: '0700', owner: '70', group: '70' }     # postgres user
+    - { path: "{{ POSTGRESQL_INIT_PATH }}", mode: '0755', owner: '70', group: '70' }     # postgres user (readable)
+    - { path: "{{ POSTGRESQL_CONF_PATH }}", mode: '0750', owner: '70', group: '70' }     # postgres user
+    - { path: "{{ POSTGRESQL_BACKUP_PATH }}", mode: '0750', owner: 'root', group: 'root' }
+    - { path: "{{ POSTGRESQL_LOGS_PATH }}", mode: '0755', owner: '70', group: '70' }     # postgres user
+    - { path: "{{ POSTGRESQL_CERTS_PATH }}", mode: '0750', owner: '70', group: '70' }    # postgres user
+  become: true
+
+- name: Create backup subdirectories for retention policy
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0750'
+    owner: root
+    group: root
+  loop:
+    - "{{ POSTGRESQL_BACKUP_PATH }}/daily"
+    - "{{ POSTGRESQL_BACKUP_PATH }}/weekly"
+    - "{{ POSTGRESQL_BACKUP_PATH }}/monthly"
+  become: true
+
+- name: Create pgAdmin storage directory
+  ansible.builtin.file:
+    path: "{{ PGADMIN_DATA_PATH }}"
+    state: directory
+    mode: '0750'
+    owner: '5050'       # pgadmin user
+    group: '0'          # root group (pgAdmin runs as uid=5050, gid=0)
+  when: PGADMIN_ENABLED | bool
+  become: true

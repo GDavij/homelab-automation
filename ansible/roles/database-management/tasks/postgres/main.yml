@@ -1,0 +1,49 @@
+---
+# ==============================================================================
+# PostgreSQL Database Engine Tasks
+# ==============================================================================
+# This file orchestrates all PostgreSQL-specific deployment tasks.
+# For other database engines (SQL Server, Oracle), create separate folders:
+# - tasks/sqlserver/main.yml
+# - tasks/oracle/main.yml
+# ==============================================================================
+
+- name: Validate PostgreSQL prerequisites and configuration
+  ansible.builtin.include_tasks: validate.yml
+  tags:
+    - postgres
+    - validate
+
+- name: Prepare PostgreSQL persistent storage directories
+  ansible.builtin.include_tasks: setup-storage.yml
+  tags:
+    - postgres
+    - setup
+    - storage
+
+- name: Deploy PostgreSQL container stack
+  ansible.builtin.include_tasks: deploy-postgresql.yml
+  tags:
+    - postgres
+    - deploy
+    - containers
+
+- name: Initialize PostgreSQL databases and users
+  ansible.builtin.include_tasks: initialize-databases.yml
+  tags:
+    - postgres
+    - database
+    - init
+
+- name: Configure PostgreSQL automated backup system
+  ansible.builtin.include_tasks: configure-backups.yml
+  tags:
+    - postgres
+    - backup
+    - database-bkp
+
+- name: Verify PostgreSQL deployment health
+  ansible.builtin.include_tasks: verify.yml
+  tags:
+    - postgres
+    - verify

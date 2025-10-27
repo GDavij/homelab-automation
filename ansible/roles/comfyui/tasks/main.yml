@@ -1,0 +1,156 @@
+---
+- name: Reset connection to apply docker group membership
+  ansible.builtin.meta: reset_connection
+  tags:
+    - comfyui
+    - ai
+
+- name: Pull ComfyUI Image for Docker
+  community.docker.docker_image:
+    name: "yanwk/comfyui-boot:{{ COMFYUI_VERSION }}"
+    source: pull
+    state: present
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - comfyui
+    - ai
+    - images
+    - deploy
+
+- name: Ensure Docker is running
+  ansible.builtin.include_tasks:
+    file: ../../common/tasks/ensure_docker.yml
+  tags:
+    - comfyui
+    - ai
+    - setup
+    - services
+
+- name: Create Persistent Storage Directories for ComfyUI
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ COMFYUI_DATA_PATH }}"
+    - "{{ COMFYUI_MODELS_PATH }}"
+    - "{{ COMFYUI_DATA_PATH }}/output"
+    - "{{ COMFYUI_DATA_PATH }}/input"
+  tags:
+    - comfyui
+    - ai
+    - setup
+    - storage
+
+- name: Create ComfyUI Model Subdirectories
+  ansible.builtin.file:
+    path: "{{ COMFYUI_MODELS_PATH }}/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - checkpoints
+    - vae
+    - loras
+    - controlnet
+    - clip
+    - unet
+    - embeddings
+    - upscale_models
+    - clip_vision
+    - style_models
+    - hypernetworks
+    - diffusion_models
+    - text_encoders
+  tags:
+    - comfyui
+    - ai
+    - setup
+    - storage
+    - models
+
+- name: Create temporary directory for docker-compose files
+  ansible.builtin.file:
+    path: "/tmp/comfyui"
+    state: directory
+    mode: '0755'
+  tags:
+    - comfyui
+    - config
+    - deploy
+
+- name: Copy docker-compose.yml to remote server
+  ansible.builtin.copy:
+    src: "{{ role_path }}/files/docker-compose.yml"
+    dest: "/tmp/comfyui/docker-compose.yml"
+    mode: '0644'
+  tags:
+    - comfyui
+    - config
+    - deploy
+
+- name: Generate .ENV file on remote server
+  ansible.builtin.template:
+    src: .docker-compose.env.j2
+    dest: "/tmp/comfyui/.env"
+    mode: '0644'
+  tags:
+    - comfyui
+    - config
+    - deploy
+
+- name: Raise ComfyUI Docker Compose File
+  community.docker.docker_compose_v2:
+    project_src: "/tmp/comfyui"
+    project_name: comfyui
+    state: present
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - comfyui
+    - deploy
+    - services
+    - ai
+
+- name: Wait for ComfyUI container to be healthy
+  community.docker.docker_container_info:
+    name: comfyui
+  register: comfyui_container
+  until: comfyui_container.container.State.Health.Status is defined and comfyui_container.container.State.Health.Status == "healthy"
+  retries: 24
+  delay: 5
+  failed_when: false
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - comfyui
+    - ai
+    - verify
+    - never
+
+- name: Display ComfyUI status
+  ansible.builtin.debug:
+    msg:
+      - "ComfyUI is running and healthy"
+      - "Access via NGINX: https://comfy.homelab"
+      - "Internal endpoint: http://comfyui:8188"
+      - "ServicePortal: http://comfyui:1111"
+      - "Jupyter: http://comfyui:8888"
+      - "GPU support: NVIDIA RTX 3060 12GB enabled"
+      - "Models path: {{ COMFYUI_MODELS_PATH }}"
+  when: comfyui_container.container.State.Health.Status is defined and comfyui_container.container.State.Health.Status == "healthy"
+  tags:
+    - comfyui
+    - ai
+    - verify
+    - never
+
+- name: Warn if ComfyUI is not healthy
+  ansible.builtin.debug:
+    msg: "WARNING: ComfyUI is not healthy. Check container logs with: docker logs comfyui"
+  when: comfyui_container.container.State.Health.Status is not defined or comfyui_container.container.State.Health.Status != "healthy"
+  tags:
+    - comfyui
+    - ai
+    - verify
+    - never

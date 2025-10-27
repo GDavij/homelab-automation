@@ -1,0 +1,9 @@
+---
+# Pi-hole handlers
+- name: Restart Pi-hole
+  community.docker.docker_container:
+    name: pihole
+    state: started
+    restart: true
+  become: true
+  become_user: "{{ ansible_user_id }}"

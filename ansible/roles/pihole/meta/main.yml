@@ -1,0 +1,7 @@
+---
+# Role dependencies for pihole
+# Ensures Docker and networking are configured before deploying Pi-hole
+
+dependencies:
+  - role: docker
+  - role: networking

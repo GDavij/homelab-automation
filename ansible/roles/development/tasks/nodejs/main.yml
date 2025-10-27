@@ -1,0 +1,25 @@
+---
+# ==============================================================================
+# Node.js Development Stack Tasks (via nvm + PNPM via Corepack)
+# ==============================================================================
+# This file orchestrates all Node.js-specific deployment tasks.
+# ==============================================================================
+
+- name: Validate Node.js prerequisites and configuration
+  ansible.builtin.include_tasks: validate.yml
+  tags:
+    - nodejs
+    - validate
+
+- name: Install nvm, Node.js, and PNPM
+  ansible.builtin.include_tasks: install-nodejs.yml
+  when: nvm_needs_installation | default(true)
+  tags:
+    - nodejs
+    - install
+
+- name: Verify Node.js installation
+  ansible.builtin.include_tasks: verify.yml
+  tags:
+    - nodejs
+    - verify

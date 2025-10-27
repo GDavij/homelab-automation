@@ -1,0 +1,45 @@
+---
+# ==============================================================================
+# Validation tasks - Pre-flight checks
+# ==============================================================================
+
+- name: Ensure PostgreSQL root password is defined
+  ansible.builtin.assert:
+    that:
+      - POSTGRES_ROOT_PASSWORD is defined
+      - (POSTGRES_ROOT_PASSWORD | default('')) | length > 0
+    fail_msg: "POSTGRES_ROOT_PASSWORD must be defined in group_vars/database-management/postgres/secrets.yml (use ansible-vault)"
+    success_msg: "PostgreSQL root password is configured"
+
+- name: Ensure PostgreSQL admin password is defined
+  ansible.builtin.assert:
+    that:
+      - POSTGRES_ADMIN_PASSWORD is defined
+      - (POSTGRES_ADMIN_PASSWORD | default('')) | length > 0
+    fail_msg: "POSTGRES_ADMIN_PASSWORD must be defined in group_vars/database-management/postgres/secrets.yml (use ansible-vault)"
+    success_msg: "PostgreSQL admin password is configured"
+
+- name: Validate database configuration structure
+  ansible.builtin.assert:
+    that:
+      - (POSTGRES_DATABASES | default([])) is iterable
+      - (POSTGRES_DATABASE_USERS | default([])) is iterable
+    fail_msg: "POSTGRES_DATABASES and POSTGRES_DATABASE_USERS must be lists in group_vars"
+    success_msg: "Database configuration structure is valid"
+
+- name: Validate each database user has a password
+  ansible.builtin.assert:
+    that:
+      - item.password is defined
+      - (item.password | default('')) | length > 0
+    fail_msg: "Database user '{{ item.username | default('unknown') }}' is missing a password"
+  loop: "{{ POSTGRES_DATABASE_USERS | default([]) }}"
+  loop_control:
+    label: "{{ item.username | default('unnamed user') }}"
+
+- name: Warn if backup encryption is enabled without GPG key
+  ansible.builtin.debug:
+    msg: "WARNING: POSTGRES_BACKUP_ENABLE_ENCRYPTION is true but POSTGRES_BACKUP_GPG_RECIPIENT is empty - backups will be unencrypted"
+  when:
+    - POSTGRES_BACKUP_ENABLE_ENCRYPTION | bool
+    - (POSTGRES_BACKUP_GPG_RECIPIENT | default('')) | length == 0

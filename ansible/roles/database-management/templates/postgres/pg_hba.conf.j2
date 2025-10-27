@@ -1,0 +1,54 @@
+# jinja-shell
+# ==============================================================================
+# PostgreSQL Host-Based Authentication (pg_hba.conf)
+# Ansible-managed file - DO NOT EDIT MANUALLY
+# ==============================================================================
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+# Local connections (Unix socket - trust within container)
+local   all             postgres                                peer
+local   all             all                                     scram-sha-256
+
+# IPv4 local connections (loopback)
+host    all             all             127.0.0.1/32            scram-sha-256
+
+# IPv6 local connections
+host    all             all             ::1/128                 scram-sha-256
+
+# Tailscale network access (primary access method)
+# ==============================================================================
+# Allow connections from ALL devices on your Tailnet (100.64.0.0/10)
+# This ensures database is accessible from any device on YOUR Tailscale network
+{% if TAILSCALE_IP_ADDRESS is defined and TAILSCALE_IP_ADDRESS != "" %}
+# Current Tailscale IP: {{ TAILSCALE_IP_ADDRESS }}
+host    all             all             100.64.0.0/10           scram-sha-256
+{% endif %}
+
+# Additional trusted networks (if specified)
+# ==============================================================================
+{% for network in POSTGRES_TRUSTED_NETWORKS | default([]) %}
+{% if network.comment is defined %}
+# {{ network.comment }}
+{% endif %}
+host    {{ network.database | default('all') }}    {{ network.user | default('all') }}    {{ network.cidr }}    scram-sha-256
+{% endfor %}
+
+# Reject all other connections (explicit deny)
+# ==============================================================================
+# Any connection not matching above rules will be rejected
+host    all             all             0.0.0.0/0               reject
+
+# ==============================================================================
+# Authentication Method Reference:
+# - trust: Allow connection without password (INSECURE - localhost only)
+# - peer: Use OS username (Unix socket only)
+# - scram-sha-256: Encrypted password challenge-response (RECOMMENDED)
+# - md5: Legacy encrypted password (use scram-sha-256 instead)
+# - reject: Deny connection explicitly
+#
+# Security Notes:
+# - Tailscale provides encrypted tunnel (WireGuard)
+# - scram-sha-256 adds authentication layer
+# - No direct internet exposure (Docker binds to Tailscale IP only)
+# - pgAdmin connects via Tailscale network
+# ==============================================================================

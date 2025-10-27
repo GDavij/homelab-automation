@@ -1,0 +1,146 @@
+---
+# ==============================================================================
+# Node.js - Installation (nvm → Node.js → PNPM via Corepack)
+# ==============================================================================
+# Install nvm, then use it to install Node.js, then enable PNPM via Corepack
+# ==============================================================================
+
+- name: Download nvm installation script
+  ansible.builtin.get_url:
+    url: "{{ NVM_INSTALL_URL }}"
+    dest: "/tmp/nvm-install.sh"
+    mode: '0755'
+  become: false
+  tags:
+    - nodejs
+    - install
+
+- name: Execute nvm installation script
+  ansible.builtin.shell: |
+    set -o pipefail
+    bash /tmp/nvm-install.sh
+  args:
+    creates: "{{ ansible_env.HOME }}/.nvm/nvm.sh"
+    executable: /bin/bash
+  become: false
+  register: nvm_install
+  tags:
+    - nodejs
+    - install
+
+- name: Remove nvm installation script
+  ansible.builtin.file:
+    path: "/tmp/nvm-install.sh"
+    state: absent
+  become: false
+  tags:
+    - nodejs
+    - install
+
+- name: Install Node.js version via nvm
+  ansible.builtin.shell: |
+    set -o pipefail
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    nvm install {{ NODEJS_VERSION }}
+    nvm alias default {{ NODEJS_VERSION }}
+  args:
+    executable: /bin/bash
+  become: false
+  register: nodejs_install
+  changed_when: "'is already installed' not in nodejs_install.stderr"
+  tags:
+    - nodejs
+    - install
+
+- name: Verify Node.js installation
+  ansible.builtin.shell: |
+    set -o pipefail
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    node -v
+  args:
+    executable: /bin/bash
+  become: false
+  register: node_version_check
+  changed_when: false
+  tags:
+    - nodejs
+    - install
+
+- name: Verify npm installation
+  ansible.builtin.shell: |
+    set -o pipefail
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    npm -v
+  args:
+    executable: /bin/bash
+  become: false
+  register: npm_version_check
+  changed_when: false
+  tags:
+    - nodejs
+    - install
+
+- name: Display Node.js installation result
+  ansible.builtin.debug:
+    msg:
+      - "✅ Node.js {{ node_version_check.stdout }} installed successfully"
+      - "✅ npm {{ npm_version_check.stdout }} included with Node.js"
+  tags:
+    - nodejs
+    - install
+
+- name: Enable PNPM via Corepack
+  ansible.builtin.shell: |
+    set -o pipefail
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    corepack enable pnpm
+  args:
+    executable: /bin/bash
+  become: false
+  register: pnpm_enable
+  changed_when: true
+  when: pnpm_needs_installation | default(true)
+  tags:
+    - nodejs
+    - install
+
+- name: Verify PNPM installation
+  ansible.builtin.shell: |
+    set -o pipefail
+    source {{ ansible_env.HOME }}/.nvm/nvm.sh
+    pnpm -v
+  args:
+    executable: /bin/bash
+  become: false
+  register: pnpm_version_check
+  changed_when: false
+  tags:
+    - nodejs
+    - install
+
+- name: Display PNPM installation result
+  ansible.builtin.debug:
+    msg: "✅ PNPM {{ pnpm_version_check.stdout }} enabled via Corepack"
+  tags:
+    - nodejs
+    - install
+
+- name: Display Node.js installation complete
+  ansible.builtin.debug:
+    msg:
+      - "=========================================="
+      - "Node.js Installation Complete"
+      - "=========================================="
+      - "✅ nvm (Node Version Manager) installed"
+      - "✅ Node.js {{ node_version_check.stdout }} installed"
+      - "✅ npm {{ npm_version_check.stdout }} installed"
+      - "✅ PNPM {{ pnpm_version_check.stdout }} enabled"
+      - ""
+      - "⚠️  IMPORTANT: To use Node.js in your current shell, run:"
+      - "   source ~/.nvm/nvm.sh"
+      - ""
+      - "Or restart your shell session (nvm auto-loads in new sessions)"
+      - "=========================================="
+  tags:
+    - nodejs
+    - install

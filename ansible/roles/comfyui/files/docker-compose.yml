@@ -1,0 +1,48 @@
+# roles/comfyui/files/docker-compose.yml
+services:
+  comfyui:
+    image: yanwk/comfyui-boot:cu128-slim
+    container_name: comfyui
+    restart: unless-stopped
+    
+    # GPU Support - NVIDIA RTX 3060 12GB
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    # Only expose port within Docker network (accessed via NGINX proxy)
+    expose:
+      - "8188"
+    
+    volumes:
+      # yanwk/comfyui-boot expects everything in /root
+      - '${COMFYUI_DATA_PATH}:/root'
+      # Models folder inside /root
+      - '${COMFYUI_MODELS_PATH}:/root/ComfyUI/models'
+    
+    environment:
+      - CLI_ARGS=--listen 0.0.0.0
+    
+    # DNS Configuration - Use Pi-hole for DNS resolution
+    dns:
+      - 172.18.0.10  # Pi-hole
+      - 8.8.8.8      # Fallback to Google DNS
+    
+    # Attach to self-hosted network for internal communication
+    networks:
+      - self-hosted
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8188"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  self-hosted:
+    external: true

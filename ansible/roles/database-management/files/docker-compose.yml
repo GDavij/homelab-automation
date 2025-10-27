@@ -1,0 +1,89 @@
+# ==============================================================================
+# PostgreSQL Database Management Stack
+# ==============================================================================
+# Includes PostgreSQL 16 with pgvector + optional pgAdmin
+# ==============================================================================
+
+services:
+  postgresql:
+    image: ${POSTGRESQL_IMAGE}
+    container_name: postgresql
+    restart: unless-stopped
+    
+    env_file:
+      - ${POSTGRES_ENV_FILE}
+    
+    volumes:
+      # Data persistence
+      - ${POSTGRESQL_DATA_PATH}:/var/lib/postgresql/data
+      
+      # Initialization scripts (run on first start)
+      - ${POSTGRESQL_INIT_PATH}:/docker-entrypoint-initdb.d
+      
+      # Configuration files
+      - ${POSTGRESQL_CONF_PATH}/postgresql.conf:/etc/postgresql/postgresql.conf
+      - ${POSTGRESQL_CONF_PATH}/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      
+      # SSL certificates
+      - ${POSTGRESQL_CERTS_PATH}:/etc/postgresql/certs
+      
+      # Backup storage
+      - ${POSTGRESQL_BACKUP_PATH}:/backups
+      
+      # Logs
+      - ${POSTGRESQL_LOG_PATH}:/var/log/postgresql
+    
+    ports:
+      # Bind to Tailscale IP for secure remote access
+      - "${TAILSCALE_BIND_ADDRESS}:${POSTGRESQL_PORT}:${POSTGRESQL_PORT}"
+    
+    networks:
+      - self-hosted
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    
+    security_opt:
+      - no-new-privileges:true
+
+  pgadmin:
+    image: ${PGADMIN_IMAGE}
+    container_name: pgadmin
+    restart: unless-stopped
+    
+    env_file:
+      - ${PGADMIN_ENV_FILE}
+    
+    volumes:
+      - ${PGADMIN_DATA_PATH}:/var/lib/pgadmin
+    
+    # Internal only - accessed via nginx proxy at pg.homelab
+    # No port mapping - only docker network access
+    expose:
+      - "${PGADMIN_PORT}"
+    
+    networks:
+      - self-hosted
+    
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    
+    labels:
+      # Nginx Proxy Manager labels
+      - "npm.enable=true"
+      - "npm.host=pg.homelab"
+      - "npm.port=${PGADMIN_PORT}"
+      - "npm.proto=http"
+    
+    # Use profile to conditionally deploy pgAdmin
+    profiles:
+      - ${PGADMIN_PROFILE}
+
+networks:
+  self-hosted:
+    external: true

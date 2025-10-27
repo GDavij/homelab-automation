@@ -1,0 +1,33 @@
+# roles/nginx/files/compose.yml
+services:
+  nginx-proxy-manager:
+    image: 'jc21/nginx-proxy-manager:2'
+    container_name: nginx-proxy-manager
+    restart: unless-stopped
+    
+    ports:
+      # We bind to the Tailscale IP for security.
+      - "${TAILSCALE_IP}:80:80"   # HTTP traffic
+      - "${TAILSCALE_IP}:443:443" # HTTPS traffic
+      # This is the port for the Admin Web UI
+      - "${TAILSCALE_IP}:81:81"
+      
+    volumes:
+      # We use our variable to store NPM's data on the HDD.
+      - '${DATA_STORE_PATH}/data:/data'
+      - '${CERTIFICATES_STORE_PATH}/letsencrypt:/etc/letsencrypt'
+      
+    # Attach to the same network as Pi-hole so they can communicate.
+    networks:
+      - self-hosted
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:81"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  self-hosted:
+    external: true

@@ -1,0 +1,142 @@
+---
+- name: Check if self-hosted zone exists
+  ansible.builtin.command: firewall-cmd --get-zones
+  register: firewalld_zones
+  changed_when: false
+  tags:
+    - networking
+    - firewall
+
+- name: Create self-hosted firewalld zone
+  ansible.builtin.command: firewall-cmd --permanent --new-zone=self-hosted
+  when: "'self-hosted' not in firewalld_zones.stdout"
+  notify: Reload firewalld
+  tags:
+    - networking
+    - firewall
+
+- name: Set self-hosted zone target to default
+  ansible.builtin.command: firewall-cmd --permanent --zone=self-hosted --set-target=default
+  when: "'self-hosted' not in firewalld_zones.stdout"
+  notify: Reload firewalld
+  tags:
+    - networking
+    - firewall
+
+- name: Reload firewalld to apply new zone
+  ansible.builtin.service:
+    name: firewalld
+    state: reloaded
+  when: "'self-hosted' not in firewalld_zones.stdout"
+  tags:
+    - networking
+    - firewall
+
+- name: Create self-hosted docker network
+  community.docker.docker_network:
+    name: self-hosted
+    state: present
+    ipam_config:
+      - subnet: 172.18.0.0/16
+        gateway: 172.18.0.1
+    driver_options:
+      com.docker.network.bridge.name: br-selfhosted
+  tags:
+    - networking
+    - docker-network
+
+- name: Get self-hosted docker network info
+  community.docker.docker_network_info:
+    name: self-hosted
+  register: docker_network_info
+  tags:
+    - networking
+    - docker-network
+
+- name: Add docker network subnet to self-hosted firewalld zone
+  ansible.posix.firewalld:
+    zone: self-hosted
+    source: "{{ item.Subnet }}"
+    state: enabled
+    permanent: true
+    immediate: true
+  with_items: "{{ docker_network_info.network.IPAM.Config }}"
+  when:
+    - docker_network_info.network is defined
+    - docker_network_info.network.IPAM is defined
+    - docker_network_info.network.IPAM.Config is defined
+  tags:
+    - networking
+    - firewall
+    - docker-network
+
+- name: Allow traffic from Tailscale IPs to self-hosted zone
+  ansible.posix.firewalld:
+    zone: self-hosted
+    source: "{{ item }}"
+    state: enabled
+    permanent: true
+    immediate: true
+  with_items: "{{ TAILSCALE_ALLOWED_IPS }}"
+  tags:
+    - networking
+    - firewall
+    - tailscale
+
+- name: Enable masquerading for self-hosted zone (internet access)
+  ansible.posix.firewalld:
+    zone: self-hosted
+    masquerade: true
+    state: enabled
+    permanent: true
+    immediate: true
+  tags:
+    - networking
+    - firewall
+    - docker-network
+
+- name: Enable forwarding for self-hosted zone
+  ansible.builtin.command: firewall-cmd --permanent --zone=self-hosted --add-forward
+  register: forward_result
+  changed_when: "'ALREADY_ENABLED' not in forward_result.stderr"
+  failed_when: false
+  tags:
+    - networking
+    - firewall
+    - docker-network
+
+- name: Enable masquerading on FedoraServer zone for Docker network only (secure routing)
+  ansible.posix.firewalld:
+    zone: FedoraServer
+    rich_rule: 'rule family="ipv4" source address="172.18.0.0/16" masquerade'
+    state: enabled
+    permanent: true
+    immediate: true
+  tags:
+    - networking
+    - firewall
+    - docker-network
+    - security
+
+- name: Enable masquerading on FedoraServer zone for Tailscale network only (secure routing)
+  ansible.posix.firewalld:
+    zone: FedoraServer
+    rich_rule: 'rule family="ipv4" source address="100.0.0.0/8" masquerade'
+    state: enabled
+    permanent: true
+    immediate: true
+  tags:
+    - networking
+    - firewall
+    - tailscale
+    - security
+
+- name: Reload firewalld to apply forwarding and masquerading
+  ansible.builtin.service:
+    name: firewalld
+    state: reloaded
+  when: forward_result.changed
+  tags:
+    - networking
+    - firewall
+    - docker-network

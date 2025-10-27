@@ -1,0 +1,12 @@
+---
+# ==============================================================================
+# Development Role - Dependencies
+# ==============================================================================
+# This role depends on the common role for pre-flight validation
+# ==============================================================================
+
+dependencies:
+  - role: common
+    tags:
+      - always
+      - validate

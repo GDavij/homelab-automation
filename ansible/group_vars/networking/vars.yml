@@ -1,0 +1,21 @@
+---
+# ==============================================================================
+# Networking Role - Variables
+# ==============================================================================
+# Tailscale VPN configuration
+# See: docs/ENVIRONMENT_VARIABLES.md#networking-role
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Docker Network Configuration
+# ------------------------------------------------------------------------------
+# Internal Docker network for service communication
+DOCKER_NETWORK_NAME: "self-hosted"
+
+# ------------------------------------------------------------------------------
+# Notes
+# ------------------------------------------------------------------------------
+# - TAILSCALE_IP_ADDRESS is auto-detected during deployment
+# - Tailscale secrets (IP addresses) are in networking/secrets.yml
+# - All services use this internal Docker network for communication
+# ==============================================================================

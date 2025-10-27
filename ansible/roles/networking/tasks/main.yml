@@ -1,0 +1,17 @@
+- name: Set firewalld backend to iptables for Docker compatibility
+  ansible.builtin.lineinfile:
+    path: /etc/firewalld/firewalld.conf
+    regexp: '^FirewallBackend='
+    line: 'FirewallBackend=iptables'
+    state: present
+  notify: restart firewalld
+  tags:
+    - networking
+    - firewall
+
+- name: Ensures Virtual Network for Self Hosted Services is configured
+  ansible.builtin.include_tasks: self-hosted.yml
+  tags:
+    - networking
+    - firewall
+    - docker-network

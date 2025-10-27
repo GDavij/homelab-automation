@@ -1,0 +1,38 @@
+---
+# ==============================================================================
+# Global Configuration Variables
+# ==============================================================================
+# Variables that apply across all roles in the homelab
+# See: docs/ENVIRONMENT_VARIABLES.md#global-variables
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Storage Configuration
+# ------------------------------------------------------------------------------
+# Base path for all persistent data storage
+# All services store data under this path for centralized management
+COLD_STORAGE_PATH: /cold-storage
+
+
+# ==============================================================================
+# Variable Organization
+# ==============================================================================
+# Variables are organized by role in subdirectories:
+#
+# - all.yml                                  → Global variables (this file)
+# - networking/vars.yml                      → Networking role variables
+# - networking/secrets.yml                   → Tailscale secrets
+# - nginx-manager/vars.yml                   → NGINX Proxy Manager variables
+# - pihole/vars.yml + secrets.yml            → Pi-hole variables and secrets
+# - ollama/vars.yml                          → Ollama LLM server variables
+# - comfyui/vars.yml + secrets.yml           → ComfyUI Stable Diffusion variables
+# - open-webui/vars.yml                      → Open WebUI chat interface variables
+# - database-management/engine.yml           → Database engine selection
+# - database-management/postgres/vars.yml    → PostgreSQL sub-role variables
+# - database-management/postgres/secrets.yml → PostgreSQL passwords
+# - database-management/pgadmin/vars.yml     → pgAdmin sub-role variables
+# - database-management/pgadmin/secrets.yml  → pgAdmin passwords
+# - database-management/internal.yml         → Computed internal variables
+#
+# See: docs/ENVIRONMENT_VARIABLES.md for complete reference
+# ==============================================================================

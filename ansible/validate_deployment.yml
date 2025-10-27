@@ -1,0 +1,253 @@
+---
+# Pre-deployment validation playbook
+# Run this before deploying to catch issues early
+# Usage: ansible-playbook validate_deployment.yml --ask-vault-pass
+
+- name: Pre-Deployment Validation
+  hosts: homelab
+  gather_facts: true
+  become: false
+
+  tasks:
+    - name: Display validation start
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Starting Pre-Deployment Validation"
+          - "=========================================="
+
+    # System Checks
+    - name: Check if host is reachable
+      ansible.builtin.ping:
+      register: ping_result
+
+    - name: Display connectivity status
+      ansible.builtin.debug:
+        msg: "✅ Host is reachable"
+      when: ping_result is succeeded
+
+    - name: Check Fedora version
+      ansible.builtin.command: cat /etc/fedora-release
+      register: fedora_version
+      changed_when: false
+
+    - name: Display OS version
+      ansible.builtin.debug:
+        msg: "OS: {{ fedora_version.stdout }}"
+
+    # Python and Ansible Prerequisites
+    - name: Check Python version
+      ansible.builtin.command: python3 --version
+      register: python_version
+      changed_when: false
+
+    - name: Display Python version
+      ansible.builtin.debug:
+        msg: "{{ python_version.stdout }}"
+
+    # Docker Checks
+    - name: Check if Docker is installed
+      ansible.builtin.command: docker --version
+      register: docker_check
+      failed_when: false
+      changed_when: false
+
+    - name: Display Docker status
+      ansible.builtin.debug:
+        msg: "{{ 'ℹ️  Docker not installed - will be installed by playbook' if docker_check.rc != 0 else '✅ Docker installed: ' + docker_check.stdout }}"
+
+    # NVIDIA GPU Checks
+    - name: Check NVIDIA driver
+      ansible.builtin.command: nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
+      register: nvidia_check
+      failed_when: false
+      changed_when: false
+
+    - name: Display GPU status
+      ansible.builtin.debug:
+        msg: "{{ '⚠️  NVIDIA driver not detected - AI services will run in CPU mode (SLOW)' if nvidia_check.rc != 0 else '✅ GPU detected: ' + nvidia_check.stdout }}"
+
+    - name: Warn about missing NVIDIA drivers
+      ansible.builtin.pause:
+        prompt: |
+          
+          ⚠️  WARNING: NVIDIA drivers not detected!
+          
+          AI services (Ollama, ComfyUI) require NVIDIA drivers for GPU acceleration.
+          Without GPU, services will be EXTREMELY SLOW or may not work.
+          
+          To install NVIDIA drivers:
+          1. sudo dnf install akmod-nvidia xorg-x11-drv-nvidia-cuda
+          2. sudo reboot
+          3. Verify with: nvidia-smi
+          
+          Press ENTER to continue anyway (NOT recommended for AI workloads)
+          Or Ctrl+C to abort and install drivers first
+      when: nvidia_check.rc != 0
+
+    # Storage Checks
+    - name: Check if cold storage path exists
+      ansible.builtin.stat:
+        path: "{{ COLD_STORAGE_PATH }}"
+      register: storage_check
+
+    - name: Display storage path status
+      ansible.builtin.debug:
+        msg: "{{ '✅ Storage path exists: ' + COLD_STORAGE_PATH if storage_check.stat.exists else 'ℹ️  Storage path will be created: ' + COLD_STORAGE_PATH }}"
+
+    - name: Check available disk space
+      ansible.builtin.shell: |
+        set -o pipefail
+        df -h {{ COLD_STORAGE_PATH if storage_check.stat.exists else '/' }} | tail -1 | awk '{print $4}'
+      args:
+        executable: /bin/bash
+      register: disk_space
+      changed_when: false
+
+    - name: Display available disk space
+      ansible.builtin.debug:
+        msg: "Available disk space: {{ disk_space.stdout }}"
+
+    - name: Warn about low disk space
+      ansible.builtin.debug:
+        msg: "⚠️  WARNING: Less than 50GB available. AI models require 30-150GB storage."
+      when: disk_space.stdout is search('(^[0-9]G|^[1-4][0-9]G)')
+
+    # Tailscale Checks
+    - name: Check if Tailscale is installed
+      ansible.builtin.command: which tailscale
+      register: tailscale_check
+      failed_when: false
+      changed_when: false
+
+    - name: Display Tailscale status
+      ansible.builtin.debug:
+        msg: "{{ '⚠️  Tailscale not installed - services will bind to ' + TAILSCALE_IP_ADDRESS + ' but may not be accessible' if tailscale_check.rc != 0 else '✅ Tailscale installed' }}"
+
+    - name: Check Tailscale status
+      ansible.builtin.command: tailscale status
+      register: tailscale_status
+      failed_when: false
+      changed_when: false
+      when: tailscale_check.rc == 0
+
+    - name: Display Tailscale connection status
+      ansible.builtin.debug:
+        msg: "{{ tailscale_status.stdout_lines | default(['Tailscale not running']) }}"
+      when: tailscale_check.rc == 0
+
+    # Firewalld Checks
+    - name: Check if firewalld is installed
+      ansible.builtin.command: which firewall-cmd
+      register: firewalld_check
+      failed_when: false
+      changed_when: false
+
+    - name: Display firewalld status
+      ansible.builtin.debug:
+        msg: "{{ 'ℹ️  Firewalld not installed - will be installed by playbook' if firewalld_check.rc != 0 else '✅ Firewalld installed' }}"
+
+    # Variable Validation
+    - name: Validate all required variables
+      ansible.builtin.assert:
+        that:
+          - TAILSCALE_IP_ADDRESS is defined
+          - TAILSCALE_ALLOWED_IPS is defined
+          - COLD_STORAGE_PATH is defined
+          - PI_HOLE_SECURE_WEBPASSWORD is defined
+          - NGINX_MANAGER_DATA_STORE_PATH is defined
+          - PI_HOLE_CONFIG_STORAGE_PATH is defined
+          - OLLAMA_VERSION is defined
+          - OLLAMA_MODELS_PATH is defined
+          - COMFYUI_VERSION is defined
+          - COMFYUI_DATA_PATH is defined
+          - COMFYUI_MODELS_PATH is defined
+          - OPEN_WEBUI_VERSION is defined
+          - OPEN_WEBUI_DATA_PATH is defined
+        fail_msg: |
+          ❌ Required variables are missing!
+          Check group_vars/ directory for role-specific vars.yml files
+        success_msg: "✅ All required variables are defined"
+
+    # Network Connectivity Checks
+    - name: Check internet connectivity
+      ansible.builtin.uri:
+        url: https://www.google.com
+        method: HEAD
+        timeout: 5
+      register: internet_check
+      failed_when: false
+
+    - name: Display internet connectivity status
+      ansible.builtin.debug:
+        msg: "{{ '✅ Internet connectivity OK' if internet_check.status == 200 else '⚠️  Internet connectivity issue - Docker image pulls may fail' }}"
+
+    - name: Check Docker Hub connectivity
+      ansible.builtin.uri:
+        url: https://hub.docker.com
+        method: HEAD
+        timeout: 5
+      register: dockerhub_check
+      failed_when: false
+
+    - name: Display Docker Hub connectivity status
+      ansible.builtin.debug:
+        msg: "{{ '✅ Docker Hub accessible' if dockerhub_check.status == 200 else '⚠️  Docker Hub connectivity issue - may affect image pulls' }}"
+
+    # Port Availability Checks
+    - name: Check if required ports are available
+      ansible.builtin.wait_for:
+        host: "{{ TAILSCALE_IP_ADDRESS }}"
+        port: "{{ item.port }}"
+        state: stopped
+        timeout: 1
+      register: port_check
+      failed_when: false
+      loop:
+        - { port: 80, name: "HTTP" }
+        - { port: 443, name: "HTTPS" }
+        - { port: 81, name: "NGINX Admin" }
+        - { port: 53, name: "DNS" }
+      loop_control:
+        label: "{{ item.name }} ({{ item.port }})"
+
+    - name: Display port status
+      ansible.builtin.debug:
+        msg: "Port {{ item.item.port }} ({{ item.item.name }}): {{ 'Available ✅' if item.failed else 'In use ⚠️ ' }}"
+      loop: "{{ port_check.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
+
+    # Final Summary
+    - name: Display validation summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Pre-Deployment Validation Complete"
+          - "=========================================="
+          - ""
+          - "✅ Host reachable"
+          - "✅ Variables validated"
+          - "{{ '✅ GPU detected' if nvidia_check.rc == 0 else '⚠️  GPU NOT detected (AI will be SLOW)' }}"
+          - "{{ '✅ Docker installed' if docker_check.rc == 0 else 'ℹ️  Docker will be installed' }}"
+          - "{{ '✅ Tailscale installed' if tailscale_check.rc == 0 else '⚠️  Tailscale not installed' }}"
+          - "{{ '✅ Internet connectivity OK' if internet_check.status == 200 else '⚠️  Internet issues' }}"
+          - ""
+          - "Storage: {{ disk_space.stdout }} available"
+          - "Ready for deployment!"
+          - ""
+          - "To deploy, run:"
+          - "  ansible-playbook server_playbook.yml --ask-vault-pass"
+          - ""
+          - "To deploy only AI services:"
+          - "  ansible-playbook server_playbook.yml --tags ai --ask-vault-pass"
+          - "=========================================="
+
+    - name: Final confirmation
+      ansible.builtin.pause:
+        prompt: |
+          
+          Ready to proceed with deployment?
+          
+          Press ENTER to confirm you've reviewed the validation results
+          Or Ctrl+C to abort

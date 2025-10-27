@@ -1,0 +1,106 @@
+---
+# ==============================================================================
+# pgAdmin Sub-Role - Verify Deployment
+# ==============================================================================
+# Verifies pgAdmin container is running and displays access information
+# See: group_vars/database-management/pgadmin/vars.yml
+# ==============================================================================
+
+- name: Check if pgAdmin is enabled
+  ansible.builtin.set_fact:
+    pgadmin_should_verify: "{{ PGADMIN_ENABLED | default(false) }}"
+  tags:
+    - always
+
+- name: Check pgAdmin container status
+  community.docker.docker_container_info:
+    name: pgadmin
+  register: pgadmin_container_info
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  when: pgadmin_should_verify
+  tags:
+    - pgadmin
+    - verify
+
+- name: Verify pgAdmin container is running
+  ansible.builtin.assert:
+    that:
+      - pgadmin_container_info.exists | default(false)
+      - pgadmin_container_info.container.State.Running | default(false)
+    fail_msg: "pgAdmin container is not running. Check Docker Compose deployment with: docker compose --profile pgadmin ps"
+    success_msg: "pgAdmin container is running successfully."
+  when: pgadmin_should_verify
+  failed_when: false
+  register: pgadmin_verification
+  tags:
+    - pgadmin
+    - verify
+
+- name: Warn if pgAdmin is not running
+  ansible.builtin.debug:
+    msg:
+      - "⚠️  WARNING: pgAdmin container is not running"
+      - "This may be because Docker Compose profiles need manual activation"
+      - "To start pgAdmin manually, run:"
+      - "  cd /tmp/database-management"
+      - "  docker compose --profile pgadmin up -d"
+  when:
+    - pgadmin_should_verify
+    - not (pgadmin_container_info.exists | default(false))
+  tags:
+    - pgadmin
+    - verify
+
+- name: Display pgAdmin access information
+  ansible.builtin.debug:
+    msg:
+      - "============================================================"
+      - "✅ pgAdmin Web UI Successfully Deployed"
+      - "============================================================"
+      - ""
+      - "🌐 Access Information:"
+      - "  Web UI: https://{{ PGADMIN_PROXY_HOST }} (via Nginx Proxy Manager)"
+      - "  Internal Port: {{ PGADMIN_PORT }} (not exposed externally)"
+      - "  Login Email: {{ PGADMIN_EMAIL }}"
+      - "  Login Password: (stored in group_vars/database-management/pgadmin/secrets.yml)"
+      - ""
+      - "⚙️  Nginx Proxy Manager Configuration Required:"
+      - "  - Host: {{ PGADMIN_PROXY_HOST }}"
+      - "  - Forward Hostname: pgadmin"
+      - "  - Forward Port: {{ PGADMIN_PORT }}"
+      - "  - Enable SSL/HTTPS"
+      - ""
+      - "🔗 Add PostgreSQL Server in pgAdmin:"
+      - "  1. Click 'Add New Server'"
+      - "  2. General Tab:"
+      - "     - Name: PostgreSQL Homelab"
+      - "  3. Connection Tab:"
+      - "     - Host: postgresql"
+      - "     - Port: 5432"
+      - "     - Maintenance database: postgres"
+      - "     - Username: {{ POSTGRES_ADMIN_USER }} (or postgres for superuser access)"
+      - "     - Password: (from group_vars/database-management/postgres/secrets.yml)"
+      - "     - Save password: Yes (optional)"
+      - ""
+      - "📝 Notes:"
+      - "  - Container Name: pgadmin"
+      - "  - Data Stored: {{ PGADMIN_DATA_PATH }}"
+      - "  - Access ONLY via nginx proxy (no direct port access)"
+      - "  - PostgreSQL remains accessible on Tailscale: {{ TAILSCALE_IP_ADDRESS }}:5432"
+      - ""
+      - "============================================================"
+  when:
+    - pgadmin_should_verify
+    - pgadmin_container_info.exists | default(false)
+  tags:
+    - pgadmin
+    - verify
+
+- name: pgAdmin is disabled
+  ansible.builtin.debug:
+    msg: "pgAdmin is disabled. Set PGADMIN_ENABLED: true in group_vars/database-management/pgadmin/vars.yml to enable"
+  when: not pgadmin_should_verify
+  tags:
+    - pgadmin
+    - verify

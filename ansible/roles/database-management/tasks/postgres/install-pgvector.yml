@@ -1,0 +1,134 @@
+---
+# ==============================================================================
+# Install pgvector Extension
+# ==============================================================================
+# Installs pgvector extension for AI embeddings and vector similarity search
+# This runs after PostgreSQL container is deployed and healthy
+# ==============================================================================
+
+- name: Display pgvector installation information
+  ansible.builtin.debug:
+    msg:
+      - "============================================================"
+      - "Installing pgvector {{ PGVECTOR_VERSION }} Extension"
+      - "============================================================"
+      - "pgvector provides vector similarity search for AI embeddings"
+      - "- Supports cosine distance, L2 distance, inner product"
+      - "- HNSW and IVFFlat indexing for fast searches"
+      - "- Essential for RAG, semantic search, recommendations"
+      - "============================================================"
+  tags:
+    - postgres
+    - pgvector
+
+- name: Wait for PostgreSQL to be fully ready
+  ansible.builtin.wait_for:
+    host: "{{ TAILSCALE_IP_ADDRESS }}"
+    port: "{{ POSTGRESQL_PORT }}"
+    state: started
+    timeout: 60
+  tags:
+    - postgres
+    - pgvector
+
+- name: Check if pgvector is already installed
+  community.docker.docker_container_exec:
+    container: postgresql
+    command: psql -U postgres -tAc "SELECT 1 FROM pg_available_extensions WHERE name='vector';"
+  register: pgvector_check
+  changed_when: false
+  failed_when: false
+  become: true
+  tags:
+    - postgres
+    - pgvector
+
+- name: Install pgvector build dependencies
+  community.docker.docker_container_exec:
+    container: postgresql
+    command: >
+      sh -c "apk add --no-cache --virtual .build-deps 
+      git build-base postgresql-dev"
+  when: pgvector_check.stdout | default('') | length == 0
+  become: true
+  register: install_deps
+  tags:
+    - postgres
+    - pgvector
+
+- name: Clone pgvector repository
+  community.docker.docker_container_exec:
+    container: postgresql
+    command: >
+      sh -c "rm -rf /tmp/pgvector &&
+      cd /tmp && 
+      git clone --branch v{{ PGVECTOR_VERSION }} https://github.com/pgvector/pgvector.git"
+  when: pgvector_check.stdout | default('') | length == 0
+  become: true
+  tags:
+    - postgres
+    - pgvector
+
+- name: Compile and install pgvector (skip bitcode errors)
+  community.docker.docker_container_exec:
+    container: postgresql
+    command: >
+      sh -c "cd /tmp/pgvector &&
+      make clean &&
+      make USE_PGXS=1 2>&1 | grep -v 'clang-19' || true &&
+      make install USE_PGXS=1 2>&1 | grep -v 'clang-19' || true &&
+      test -f /usr/local/lib/postgresql/vector.so"
+  when: pgvector_check.stdout | default('') | length == 0
+  become: true
+  register: pgvector_install
+  tags:
+    - postgres
+    - pgvector
+
+- name: Clean up build dependencies and source
+  community.docker.docker_container_exec:
+    container: postgresql
+    command: >
+      sh -c "apk del .build-deps &&
+      rm -rf /tmp/pgvector"
+  when: pgvector_check.stdout | default('') | length == 0
+  become: true
+  tags:
+    - postgres
+    - pgvector
+
+- name: Verify pgvector installation
+  community.docker.docker_container_exec:
+    container: postgresql
+    command: psql -U postgres -tAc "SELECT 1 FROM pg_available_extensions WHERE name='vector';"
+  register: pgvector_verify
+  changed_when: false
+  failed_when: pgvector_verify.stdout | default('') | length == 0
+  become: true
+  tags:
+    - postgres
+    - pgvector
+    - verify
+
+- name: Display pgvector installation success
+  ansible.builtin.debug:
+    msg:
+      - "============================================================"
+      - "✅ pgvector {{ PGVECTOR_VERSION }} Successfully Installed"
+      - "============================================================"
+      - "The vector extension is now available for all databases."
+      - ""
+      - "To enable in a database, run:"
+      - "  CREATE EXTENSION IF NOT EXISTS vector;"
+      - ""
+      - "Example usage:"
+      - "  CREATE TABLE embeddings (id bigserial PRIMARY KEY, embedding vector(1536));"
+      - "  CREATE INDEX ON embeddings USING hnsw (embedding vector_cosine_ops);"
+      - "  SELECT * FROM embeddings ORDER BY embedding <=> '[0.1,0.2,...]' LIMIT 10;"
+      - ""
+      - "See: docs/POSTGRES_DATABASE_MANAGEMENT.md for more examples"
+      - "============================================================"
+  when: pgvector_verify.stdout | default('') | length > 0
+  tags:
+    - postgres
+    - pgvector

@@ -1,0 +1,101 @@
+---
+# ==============================================================================
+# Node.js - Pre-installation Validation
+# ==============================================================================
+# Check if nvm, Node.js, npm, and PNPM are already installed
+# ==============================================================================
+
+- name: Check if nvm is installed
+  ansible.builtin.shell: |
+    source ~/.nvm/nvm.sh 2>/dev/null && command -v nvm
+  register: nvm_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - nodejs
+    - validate
+
+- name: Check if Node.js is installed
+  ansible.builtin.shell: |
+    source ~/.nvm/nvm.sh 2>/dev/null && node --version
+  register: node_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - nodejs
+    - validate
+
+- name: Check if npm is installed
+  ansible.builtin.shell: |
+    source ~/.nvm/nvm.sh 2>/dev/null && npm --version
+  register: npm_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - nodejs
+    - validate
+
+- name: Check if PNPM is installed
+  ansible.builtin.shell: |
+    source ~/.nvm/nvm.sh 2>/dev/null && pnpm --version
+  register: pnpm_check
+  failed_when: false
+  changed_when: false
+  tags:
+    - nodejs
+    - validate
+
+- name: Display current nvm status
+  ansible.builtin.debug:
+    msg: "{{ '✅ nvm already installed' if nvm_check.rc == 0 else 'ℹ️  nvm not found' }}"
+  tags:
+    - nodejs
+    - validate
+
+- name: Display current Node.js version if found
+  ansible.builtin.debug:
+    msg: "✅ Node.js already installed: {{ node_check.stdout }}"
+  when: node_check.rc == 0
+  tags:
+    - nodejs
+    - validate
+
+- name: Display current npm version if found
+  ansible.builtin.debug:
+    msg: "✅ npm already installed: {{ npm_check.stdout }}"
+  when: npm_check.rc == 0
+  tags:
+    - nodejs
+    - validate
+
+- name: Display current PNPM version if found
+  ansible.builtin.debug:
+    msg: "✅ PNPM already installed: {{ pnpm_check.stdout }}"
+  when: pnpm_check.rc == 0
+  tags:
+    - nodejs
+    - validate
+
+- name: Set fact for nvm installation requirement
+  ansible.builtin.set_fact:
+    nvm_needs_installation: "{{ nvm_check.rc != 0 or node_check.rc != 0 }}"
+  tags:
+    - nodejs
+    - validate
+
+- name: Set fact for PNPM installation requirement
+  ansible.builtin.set_fact:
+    pnpm_needs_installation: "{{ pnpm_check.rc != 0 }}"
+  tags:
+    - nodejs
+    - validate
+
+- name: Display installation decision
+  ansible.builtin.debug:
+    msg: >-
+      {{ 'ℹ️  Node.js installation needed (will install nvm → Node.js → PNPM)'
+      if nvm_needs_installation
+      else '✅ Node.js environment already installed - skipping installation' }}
+  tags:
+    - nodejs
+    - validate

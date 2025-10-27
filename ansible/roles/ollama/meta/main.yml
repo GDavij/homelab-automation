@@ -1,0 +1,7 @@
+---
+# Role dependencies for ollama
+# Ensures Docker with GPU support and networking are configured
+
+dependencies:
+  - role: docker
+  - role: networking

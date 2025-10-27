@@ -1,0 +1,72 @@
+---
+# ==============================================================================
+# Python - Post-installation Verification
+# ==============================================================================
+# Verify Python installation and functionality
+# ==============================================================================
+
+- name: Test Python 3 command
+  ansible.builtin.command: python3 --version
+  register: python3_version
+  changed_when: false
+  tags:
+    - python
+    - verify
+
+- name: Test pip3 command
+  ansible.builtin.command: pip3 --version
+  register: pip3_version
+  changed_when: false
+  tags:
+    - python
+    - verify
+
+- name: Test pip list command
+  ansible.builtin.command: pip3 list
+  register: pip3_list
+  changed_when: false
+  failed_when: pip3_list.rc != 0
+  tags:
+    - python
+    - verify
+
+- name: Test Python can import basic modules
+  ansible.builtin.command: python3 -c "import sys, os, json; print('OK')"
+  register: python_import_test
+  changed_when: false
+  failed_when: python_import_test.stdout != "OK"
+  tags:
+    - python
+    - verify
+
+- name: Extract Python version number
+  ansible.builtin.set_fact:
+    python_version_installed: "{{ python3_version.stdout | regex_search('\\d+\\.\\d+') }}"
+  tags:
+    - python
+    - verify
+
+- name: Verify Python version meets minimum requirement
+  ansible.builtin.assert:
+    that:
+      - python_version_installed is version(PYTHON_MIN_VERSION, '>=')
+    fail_msg: "Python version {{ python_version_installed }} is below minimum required version {{ PYTHON_MIN_VERSION }}"
+    success_msg: "✅ Python version {{ python_version_installed }} meets requirements (>= {{ PYTHON_MIN_VERSION }})"
+  tags:
+    - python
+    - verify
+
+- name: Display Python installation summary
+  ansible.builtin.debug:
+    msg:
+      - "=========================================="
+      - "Python Installation Verification"
+      - "=========================================="
+      - "Python Version: {{ python3_version.stdout }}"
+      - "pip Version: {{ pip3_version.stdout }}"
+      - "Import Test: ✅ PASSED"
+      - "Status: ✅ Python development environment ready"
+      - "=========================================="
+  tags:
+    - python
+    - verify

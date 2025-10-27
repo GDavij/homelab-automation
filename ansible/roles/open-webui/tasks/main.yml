@@ -1,0 +1,124 @@
+---
+- name: Reset connection to apply docker group membership
+  ansible.builtin.meta: reset_connection
+  tags:
+    - open-webui
+    - ai
+
+- name: Pull Open WebUI Image for Docker
+  community.docker.docker_image:
+    name: "ghcr.io/open-webui/open-webui:{{ OPEN_WEBUI_VERSION }}"
+    source: pull
+    state: present
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - open-webui
+    - ai
+    - images
+    - deploy
+
+- name: Ensure Docker is running
+  ansible.builtin.include_tasks:
+    file: ../../common/tasks/ensure_docker.yml
+  tags:
+    - open-webui
+    - ai
+    - setup
+    - services
+
+- name: Create Persistent Storage Directories for Open WebUI
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ OPEN_WEBUI_DATA_PATH }}"
+  tags:
+    - open-webui
+    - ai
+    - setup
+    - storage
+
+- name: Create temporary directory for docker-compose files
+  ansible.builtin.file:
+    path: "/tmp/open-webui"
+    state: directory
+    mode: '0755'
+  tags:
+    - open-webui
+    - config
+    - deploy
+
+- name: Copy docker-compose.yml to remote server
+  ansible.builtin.copy:
+    src: "{{ role_path }}/files/docker-compose.yml"
+    dest: "/tmp/open-webui/docker-compose.yml"
+    mode: '0644'
+  tags:
+    - open-webui
+    - config
+    - deploy
+
+- name: Generate .ENV file on remote server
+  ansible.builtin.template:
+    src: .docker-compose.env.j2
+    dest: "/tmp/open-webui/.env"
+    mode: '0644'
+  tags:
+    - open-webui
+    - config
+    - deploy
+
+- name: Raise Open-WebUI Docker Compose File
+  community.docker.docker_compose_v2:
+    project_src: "/tmp/open-webui"
+    project_name: open_webui
+    state: present
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - open-webui
+    - deploy
+    - services
+
+- name: Wait for Open WebUI container to be healthy
+  community.docker.docker_container_info:
+    name: open-webui
+  register: openwebui_container
+  until: openwebui_container.exists and openwebui_container.container.State.Running
+  retries: 12
+  delay: 5
+  failed_when: false
+  become: true
+  become_user: "{{ ansible_user_id }}"
+  tags:
+    - open-webui
+    - ai
+    - verify
+    - never
+
+- name: Display Open WebUI status
+  ansible.builtin.debug:
+    msg:
+      - "Open WebUI is running and healthy"
+      - "Access via NGINX: https://chat.homelab"
+      - "Internal endpoint: http://open-webui:3000"
+      - "Connected to Ollama: http://ollama:11434"
+      - "First user to register becomes admin"
+  when: openwebui_container.exists and openwebui_container.container.State.Running
+  tags:
+    - open-webui
+    - ai
+    - verify
+    - never
+
+- name: Warn if Open WebUI is not healthy
+  ansible.builtin.debug:
+    msg: "WARNING: Open WebUI is not healthy. Check container logs with: docker logs open-webui"
+  when: not openwebui_container.exists or not openwebui_container.container.State.Running
+  tags:
+    - open-webui
+    - ai
+    - verify
+    - never

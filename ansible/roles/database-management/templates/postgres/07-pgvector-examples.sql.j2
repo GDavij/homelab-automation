@@ -1,0 +1,66 @@
+-- ==============================================================================
+-- pgvector usage examples (commented out)
+-- ==============================================================================
+-- Uncomment and customize for your AI applications
+
+/*
+-- Connect to your AI database
+\c your_ai_database
+
+-- Create embeddings table with vector column
+CREATE TABLE IF NOT EXISTS embeddings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    content TEXT NOT NULL,
+    embedding VECTOR(1536),  -- Adjust dimension for your model
+    metadata JSONB,
+    source TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+COMMENT ON TABLE embeddings IS 'Vector embeddings for semantic search';
+COMMENT ON COLUMN embeddings.embedding IS 'Vector dimension: 1536 for OpenAI ada-002. Adjust for other models (384 for all-MiniLM, 768 for BERT, 4096 for text-embedding-3-large)';
+
+-- Create indexes for fast vector similarity search
+CREATE INDEX IF NOT EXISTS embeddings_embedding_hnsw_idx ON embeddings USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS embeddings_embedding_ivfflat_idx ON embeddings USING ivfflat (embedding vector_l2_ops);
+CREATE INDEX IF NOT EXISTS embeddings_metadata_gin_idx ON embeddings USING gin (metadata jsonb_path_ops);
+
+-- Example queries:
+
+-- 1. Cosine similarity search (most common for embeddings)
+-- SELECT 
+--     id, 
+--     content,
+--     1 - (embedding <=> '[0.1,0.2,...]'::vector) AS similarity
+-- FROM embeddings
+-- ORDER BY embedding <=> '[0.1,0.2,...]'::vector
+-- LIMIT 10;
+
+-- 2. L2 distance search
+-- SELECT 
+--     id,
+--     content,
+--     embedding <-> '[0.1,0.2,...]'::vector AS distance
+-- FROM embeddings
+-- ORDER BY embedding <-> '[0.1,0.2,...]'::vector
+-- LIMIT 10;
+
+-- 3. Combined search with metadata filtering
+-- SELECT 
+--     id,
+--     content,
+--     metadata,
+--     1 - (embedding <=> '[0.1,0.2,...]'::vector) AS similarity
+-- FROM embeddings
+-- WHERE metadata->>'category' = 'documentation'
+-- ORDER BY embedding <=> '[0.1,0.2,...]'::vector
+-- LIMIT 10;
+
+-- Vector distance operators:
+-- <->  : L2 distance (Euclidean)
+-- <#>  : Inner product (dot product)
+-- <=>  : Cosine distance (1 - cosine similarity)
+*/
+
+SELECT 'pgvector examples available in script comments' AS status;

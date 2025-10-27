@@ -1,0 +1,34 @@
+-- ==============================================================================
+-- Per-database extension configuration
+-- ==============================================================================
+
+{% for database in POSTGRES_DATABASES %}
+\c "{{ database.name }}"
+
+-- Enable pgvector in every database for AI embeddings
+CREATE EXTENSION IF NOT EXISTS vector;
+
+{% if database.enable_uuid | default(true) %}
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+{% endif %}
+
+{% if database.enable_trgm | default(false) %}
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+{% endif %}
+
+{% if database.enable_pg_stat_statements | default(false) %}
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+{% endif %}
+
+{% if database.schema is defined %}
+-- Create custom schema if specified
+CREATE SCHEMA IF NOT EXISTS "{{ database.schema }}";
+ALTER SCHEMA "{{ database.schema }}" OWNER TO "{{ database.owner | default('postgres') }}";
+{% endif %}
+
+{% endfor %}
+
+-- Return to postgres database
+\c postgres
+
+SELECT 'Database-specific extensions configured' AS status;

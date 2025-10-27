@@ -1,0 +1,49 @@
+-- ==============================================================================
+-- Permission grants (RBAC implementation)
+-- ==============================================================================
+
+{% for database in POSTGRES_DATABASES %}
+\c "{{ database.name }}"
+
+-- Grant ownership privileges
+GRANT ALL PRIVILEGES ON DATABASE "{{ database.name }}" TO "{{ database.owner | default('postgres') }}";
+GRANT ALL PRIVILEGES ON SCHEMA public TO "{{ database.owner | default('postgres') }}";
+
+-- Set default privileges for future objects
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "{{ database.owner | default('postgres') }}";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "{{ database.owner | default('postgres') }}";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO "{{ database.owner | default('postgres') }}";
+
+{% if database.schema is defined %}
+GRANT ALL PRIVILEGES ON SCHEMA "{{ database.schema }}" TO "{{ database.owner | default('postgres') }}";
+ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ database.schema }}" GRANT ALL ON TABLES TO "{{ database.owner | default('postgres') }}";
+ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ database.schema }}" GRANT ALL ON SEQUENCES TO "{{ database.owner | default('postgres') }}";
+ALTER DEFAULT PRIVILEGES IN SCHEMA "{{ database.schema }}" GRANT ALL ON FUNCTIONS TO "{{ database.owner | default('postgres') }}";
+{% endif %}
+
+-- Grant privileges to additional allowed users
+{% for user in database.allowed_users | default([]) %}
+GRANT CONNECT ON DATABASE "{{ database.name }}" TO "{{ user }}";
+GRANT USAGE ON SCHEMA public TO "{{ user }}";
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "{{ user }}";
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "{{ user }}";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO "{{ user }}";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO "{{ user }}";
+{% endfor %}
+
+-- Grant read-only privileges
+{% for user in database.readonly_users | default([]) %}
+{% if user not in (database.allowed_users | default([])) %}
+GRANT CONNECT ON DATABASE "{{ database.name }}" TO "{{ user }}";
+GRANT USAGE ON SCHEMA public TO "{{ user }}";
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO "{{ user }}";
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO "{{ user }}";
+{% endif %}
+{% endfor %}
+
+{% endfor %}
+
+-- Return to postgres database
+\c postgres
+
+SELECT 'Permissions configured successfully' AS status;

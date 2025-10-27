@@ -1,0 +1,95 @@
+---
+# ==============================================================================
+# .NET SDK - Post-installation Verification
+# ==============================================================================
+# Verify .NET SDK installation and functionality
+# ==============================================================================
+
+- name: Test dotnet command
+  ansible.builtin.command: dotnet --version
+  register: dotnet_version
+  changed_when: false
+  environment:
+    DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  tags:
+    - dotnet
+    - verify
+
+- name: Test dotnet SDK list
+  ansible.builtin.command: dotnet --list-sdks
+  register: dotnet_sdks
+  changed_when: false
+  environment:
+    DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  tags:
+    - dotnet
+    - verify
+
+- name: Test dotnet runtime list
+  ansible.builtin.command: dotnet --list-runtimes
+  register: dotnet_runtimes
+  changed_when: false
+  environment:
+    DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  tags:
+    - dotnet
+    - verify
+
+- name: Test dotnet can create a test project
+  ansible.builtin.command: dotnet new console -n dotnet-test-project -o /tmp/dotnet-test-verify
+  register: dotnet_create_test
+  changed_when: false
+  failed_when: dotnet_create_test.rc != 0
+  environment:
+    DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  tags:
+    - dotnet
+    - verify
+
+- name: Clean up test project
+  ansible.builtin.file:
+    path: /tmp/dotnet-test-verify
+    state: absent
+  tags:
+    - dotnet
+    - verify
+
+- name: Extract .NET SDK version number
+  ansible.builtin.set_fact:
+    dotnet_version_installed: "{{ dotnet_version.stdout }}"
+  tags:
+    - dotnet
+    - verify
+
+- name: Verify .NET SDK meets minimum version requirement
+  ansible.builtin.assert:
+    that:
+      - dotnet_version_installed is version(DOTNET_MIN_VERSION, '>=')
+    fail_msg: ".NET SDK version {{ dotnet_version_installed }} is below minimum required version {{ DOTNET_MIN_VERSION }}"
+    success_msg: "✅ .NET SDK version {{ dotnet_version_installed }} meets requirements (>= {{ DOTNET_MIN_VERSION }})"
+  tags:
+    - dotnet
+    - verify
+
+- name: Display .NET SDK installation summary
+  ansible.builtin.debug:
+    msg:
+      - "=========================================="
+      - ".NET SDK Installation Verification"
+      - "=========================================="
+      - ".NET SDK Version: {{ dotnet_version.stdout }}"
+      - ""
+      - "Installed SDKs:"
+      - "{{ dotnet_sdks.stdout }}"
+      - ""
+      - "Installed Runtimes:"
+      - "{{ dotnet_runtimes.stdout }}"
+      - ""
+      - "Project Creation Test: ✅ PASSED"
+      - "Status: ✅ .NET development environment ready"
+      - ""
+      - "ℹ️  Telemetry: Disabled (DOTNET_CLI_TELEMETRY_OPTOUT=1)"
+      - "=========================================="
+  tags:
+    - dotnet
+    - verify

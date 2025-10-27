@@ -1,0 +1,49 @@
+---
+# ==============================================================================
+# development role - Main task orchestration
+# ==============================================================================
+# This role provides a unified interface for deploying development tools
+# Currently supported:
+#   - Python 3.x with pip and development tools
+#   - Node.js v22 (LTS) via nvm + PNPM via Corepack
+#   - .NET 9 SDK via Fedora repositories
+# ==============================================================================
+# All tool-specific logic (validation, installation, verification)
+# is isolated in tool subfolders (python/, nodejs/, dotnet/)
+# ==============================================================================
+
+# ==============================================================================
+# Python Development Stack
+# ==============================================================================
+
+- name: Deploy Python development environment
+  ansible.builtin.include_tasks: python/main.yml
+  when: not DEVELOPMENT_SKIP_PYTHON | default(false)
+  tags:
+    - development
+    - python
+    - dev-tools
+
+# ==============================================================================
+# Node.js Development Stack (nvm + Node.js + PNPM)
+# ==============================================================================
+
+- name: Deploy Node.js development environment
+  ansible.builtin.include_tasks: nodejs/main.yml
+  when: not DEVELOPMENT_SKIP_NODEJS | default(false)
+  tags:
+    - development
+    - nodejs
+    - dev-tools
+
+# ==============================================================================
+# .NET SDK Development Stack
+# ==============================================================================
+
+- name: Deploy .NET SDK development environment
+  ansible.builtin.include_tasks: dotnet/main.yml
+  when: not DEVELOPMENT_SKIP_DOTNET | default(false)
+  tags:
+    - development
+    - dotnet
+    - dev-tools

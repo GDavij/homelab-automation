@@ -1,0 +1,105 @@
+---
+# ==============================================================================
+# pgAdmin Sub-Role - Deploy pgAdmin Container
+# ==============================================================================
+# Deploys pgAdmin 4 web interface for PostgreSQL management
+# See: group_vars/database-management/pgadmin/vars.yml
+# See: group_vars/database-management/pgadmin/secrets.yml
+# ==============================================================================
+
+- name: Check if pgAdmin deployment is enabled
+  ansible.builtin.debug:
+    msg: "pgAdmin deployment: {{ 'ENABLED' if PGADMIN_ENABLED | default(false) else 'DISABLED' }}"
+
+- name: Skip pgAdmin deployment (disabled)
+  ansible.builtin.debug:
+    msg: "pgAdmin is disabled. Set PGADMIN_ENABLED: true in group_vars/database-management/pgadmin/vars.yml to enable."
+  when: not (PGADMIN_ENABLED | default(false))
+
+- name: Ensure pgAdmin data directory exists with correct ownership
+  ansible.builtin.file:
+    path: "{{ PGADMIN_DATA_PATH }}"
+    state: directory
+    owner: "5050"
+    group: "0"
+    mode: '0750'
+  become: true
+  when: PGADMIN_ENABLED | default(false)
+  register: pgadmin_dir_created
+  tags:
+    - pgadmin
+    - storage
+
+- name: Fix ownership of existing pgAdmin data (only subdirectories/files)
+  ansible.builtin.shell: |
+    # Only fix ownership if directory has wrong permissions
+    current_owner=$(stat -c '%u' "{{ PGADMIN_DATA_PATH }}" 2>/dev/null || echo "unknown")
+    if [ "$current_owner" != "5050" ] || [ -n "$(find {{ PGADMIN_DATA_PATH }} ! -user 5050 2>/dev/null)" ]; then
+      chown -R 5050:0 "{{ PGADMIN_DATA_PATH }}"
+      echo "changed"
+    else
+      echo "ok"
+    fi
+  args:
+    executable: /bin/bash
+  become: true
+  when: PGADMIN_ENABLED | default(false)
+  register: pgadmin_ownership_fix
+  changed_when: "'changed' in pgadmin_ownership_fix.stdout"
+  tags:
+    - pgadmin
+    - storage
+
+- name: Display pgAdmin deployment information
+  ansible.builtin.debug:
+    msg:
+      - "============================================================"
+      - "Deploying pgAdmin 4 Web Interface"
+      - "============================================================"
+      - "Version: {{ PGADMIN_VERSION }}"
+      - "Port: {{ PGADMIN_PORT }}"
+      - "Data Path: {{ PGADMIN_DATA_PATH }}"
+      - "Login Email: {{ PGADMIN_EMAIL }}"
+      - "Container: Managed by Docker Compose (database-management stack)"
+      - "Ownership: uid=5050(pgadmin) gid=0(root)"
+      - "Permissions Fixed: {{ pgadmin_ownership_fix.changed | default(false) }}"
+      - "============================================================"
+  when: PGADMIN_ENABLED | default(false)
+
+- name: Check if pgAdmin container exists and is running
+  ansible.builtin.shell: |
+    docker inspect -f '{{ "{{" }}.State.Running{{ "}}" }}' pgadmin 2>/dev/null || echo "not_found"
+  args:
+    executable: /bin/bash
+  become: true
+  register: pgadmin_container_status
+  changed_when: false
+  when: PGADMIN_ENABLED | default(false)
+  tags:
+    - pgadmin
+
+- name: Restart pgAdmin container only if permissions were fixed
+  ansible.builtin.shell: |
+    docker restart pgadmin
+  args:
+    executable: /bin/bash
+  become: true
+  when:
+    - PGADMIN_ENABLED | default(false)
+    - pgadmin_ownership_fix.changed | default(false)
+    - pgadmin_container_status.stdout == "true"
+  register: pgadmin_restart_result
+  tags:
+    - pgadmin
+
+- name: Wait for pgAdmin to be ready after restart
+  ansible.builtin.pause:
+    seconds: 5
+  when:
+    - PGADMIN_ENABLED | default(false)
+    - pgadmin_restart_result is changed
+
+- name: pgAdmin deployment handled by Docker Compose
+  ansible.builtin.debug:
+    msg: "pgAdmin container is deployed as part of the database-management Docker Compose stack"
+  when: PGADMIN_ENABLED | default(false)

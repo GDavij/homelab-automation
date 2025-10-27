@@ -1,0 +1,79 @@
+---
+# ==============================================================================
+# database-management role - Main task orchestration
+# ==============================================================================
+# This role provides a unified interface for deploying database engines
+# Currently supported:
+#   - PostgreSQL 16 with pgvector extension
+# Future support planned:
+#   - SQL Server
+#   - Oracle Database
+#   - MySQL/MariaDB
+# ==============================================================================
+# All engine-specific logic (validation, storage, deployment, backups, verify)
+# is isolated in engine subfolders (postgres/, sqlserver/, oracle/)
+# ==============================================================================
+
+# ==============================================================================
+# Database Engine Selection
+# ==============================================================================
+# Include engine-specific tasks based on DATABASE_ENGINE variable
+# Default: postgres
+# ==============================================================================
+
+- name: Deploy PostgreSQL database engine
+  ansible.builtin.include_tasks: postgres/main.yml
+  when: DATABASE_ENGINE | default('postgres') == 'postgres'
+  tags:
+    - database
+    - database-management
+    - postgres
+    - database-bkp
+
+# ==============================================================================
+# pgAdmin Sub-Role (Optional Web UI for PostgreSQL)
+# ==============================================================================
+
+- name: Deploy pgAdmin management interface
+  ansible.builtin.include_tasks: pgadmin/deploy.yml
+  when:
+    - DATABASE_ENGINE | default('postgres') == 'postgres'
+    - PGADMIN_ENABLED | default(false)
+  tags:
+    - database
+    - database-management
+    - pgadmin
+
+- name: Verify pgAdmin deployment
+  ansible.builtin.include_tasks: pgadmin/verify.yml
+  when:
+    - DATABASE_ENGINE | default('postgres') == 'postgres'
+    - PGADMIN_ENABLED | default(false)
+  tags:
+    - database
+    - database-management
+    - pgadmin
+    - verify
+
+# ==============================================================================
+# Future Database Engines
+# ==============================================================================
+
+# Future engine implementations:
+# - name: Deploy SQL Server database engine
+#   ansible.builtin.include_tasks: sqlserver/main.yml
+#   when: DATABASE_ENGINE == 'sqlserver'
+#   tags:
+#     - database
+#     - database-management
+#     - sqlserver
+#     - database-bkp
+#
+# - name: Deploy Oracle database engine
+#   ansible.builtin.include_tasks: oracle/main.yml
+#   when: DATABASE_ENGINE == 'oracle'
+#   tags:
+#     - database
+#     - database-management
+#     - oracle
+#     - database-bkp

@@ -1,0 +1,6 @@
+---
+# Role dependencies for docker
+# Ensures common pre-flight validation is completed first
+
+dependencies:
+  - role: common

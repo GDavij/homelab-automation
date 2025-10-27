@@ -1,0 +1,276 @@
+---
+# Post-deployment verification playbook
+# Run this after deployment to verify all services are running
+# Usage: ansible-playbook verify_services.yml
+
+- name: Service Verification
+  hosts: homelab
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: Display verification start
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Starting Service Verification"
+          - "=========================================="
+
+    # Docker Service Checks
+    - name: Check Docker service status
+      ansible.builtin.systemd:
+        name: docker
+      register: docker_service
+      become: true
+
+    - name: Display Docker service status
+      ansible.builtin.debug:
+        msg: "{{ '✅ Docker service is running' if docker_service.status.ActiveState == 'active' else '❌ Docker service is NOT running' }}"
+
+    # Container Status Checks
+    - name: Get all container statuses
+      ansible.builtin.shell: docker ps -a --format 'table {%raw%}{{.Names}}\t{{.Status}}\t{{.Ports}}{%endraw%}'
+      register: containers_status
+      changed_when: false
+      become: true
+
+    - name: Display all containers
+      ansible.builtin.debug:
+        msg: "{{ containers_status.stdout_lines }}"
+
+    - name: Check specific containers are running
+      ansible.builtin.shell: docker ps --filter "name={{ item }}" --format '{%raw%}{{.Status}}{%endraw%}'
+      register: container_check
+      changed_when: false
+      failed_when: false
+      become: true
+      loop:
+        - nginx-proxy-manager
+        - pihole
+        - ollama
+        - comfyui
+        - open-webui
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Display container health
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: {{ '✅ Running (' + item.stdout + ')' if item.rc == 0 and item.stdout != '' else '❌ NOT running or not found' }}"
+      loop: "{{ container_check.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # GPU Verification
+    - name: Check GPU access in Ollama container
+      ansible.builtin.command: docker exec ollama nvidia-smi --query-gpu=name,utilization.gpu --format=csv,noheader
+      register: ollama_gpu
+      failed_when: false
+      changed_when: false
+
+    - name: Display Ollama GPU access
+      ansible.builtin.debug:
+        msg: "{{ '✅ Ollama has GPU access: ' + ollama_gpu.stdout if ollama_gpu.rc == 0 else '⚠️  Ollama does NOT have GPU access' }}"
+
+    - name: Check GPU access in ComfyUI container
+      ansible.builtin.command: docker exec comfyui nvidia-smi --query-gpu=name,utilization.gpu --format=csv,noheader
+      register: comfyui_gpu
+      failed_when: false
+      changed_when: false
+
+    - name: Display ComfyUI GPU access
+      ansible.builtin.debug:
+        msg: "{{ '✅ ComfyUI has GPU access: ' + comfyui_gpu.stdout if comfyui_gpu.rc == 0 else '⚠️  ComfyUI does NOT have GPU access' }}"
+
+    # Network Checks
+    - name: Check Docker self-hosted network exists
+      ansible.builtin.command: docker network inspect self-hosted
+      register: network_check
+      failed_when: false
+      changed_when: false
+
+    - name: Display network status
+      ansible.builtin.debug:
+        msg: "{{ '✅ Docker self-hosted network exists' if network_check.rc == 0 else '❌ Docker self-hosted network NOT found' }}"
+
+    # Service Endpoint Checks (Internal)
+    - name: Wait for NGINX Proxy Manager to be responsive
+      ansible.builtin.uri:
+        url: "http://{{ TAILSCALE_IP_ADDRESS }}:81"
+        method: GET
+        timeout: 5
+      register: nginx_health
+      failed_when: false
+      retries: 3
+      delay: 5
+
+    - name: Display NGINX Proxy Manager status
+      ansible.builtin.debug:
+        msg: "{{ '✅ NGINX Proxy Manager accessible at http://' + TAILSCALE_IP_ADDRESS + ':81' if nginx_health.status == 200 else '⚠️  NGINX Proxy Manager not accessible' }}"
+
+    - name: Check Pi-hole DNS port
+      ansible.builtin.wait_for:
+        host: "{{ TAILSCALE_IP_ADDRESS }}"
+        port: 53
+        timeout: 5
+      register: pihole_dns
+      failed_when: false
+
+    - name: Display Pi-hole DNS status
+      ansible.builtin.debug:
+        msg: "{{ '✅ Pi-hole DNS listening on port 53' if pihole_dns is succeeded else '⚠️  Pi-hole DNS not accessible on port 53' }}"
+
+    - name: Test Pi-hole web interface
+      ansible.builtin.uri:
+        url: "http://{{ TAILSCALE_IP_ADDRESS }}/admin"
+        method: GET
+        timeout: 5
+      register: pihole_web
+      failed_when: false
+
+    - name: Display Pi-hole web status
+      ansible.builtin.debug:
+        msg: "{{ '✅ Pi-hole web interface accessible at http://' + TAILSCALE_IP_ADDRESS + '/admin' if pihole_web.status == 200 else '⚠️  Pi-hole web interface not accessible' }}"
+
+    # AI Services Internal Health Checks
+    - name: Check Ollama API (from host)
+      ansible.builtin.command: docker exec ollama curl -f http://localhost:11434/api/tags
+      register: ollama_api
+      failed_when: false
+      changed_when: false
+
+    - name: Display Ollama API status
+      ansible.builtin.debug:
+        msg: "{{ '✅ Ollama API responsive (internal)' if ollama_api.rc == 0 else '⚠️  Ollama API not responsive' }}"
+
+    - name: Check ComfyUI (from host)
+      ansible.builtin.command: docker exec comfyui curl -f http://localhost:8188
+      register: comfyui_web
+      failed_when: false
+      changed_when: false
+
+    - name: Display ComfyUI status
+      ansible.builtin.debug:
+        msg: "{{ '✅ ComfyUI responsive (internal)' if comfyui_web.rc == 0 else '⚠️  ComfyUI not responsive' }}"
+
+    - name: Check Open WebUI (from host)
+      ansible.builtin.command: docker exec open-webui curl -f http://localhost:3000
+      register: openwebui_web
+      failed_when: false
+      changed_when: false
+
+    - name: Display Open WebUI status
+      ansible.builtin.debug:
+        msg: "{{ '✅ Open WebUI responsive (internal)' if openwebui_web.rc == 0 else '⚠️  Open WebUI not responsive' }}"
+
+    # Storage Verification
+    - name: Check storage paths exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: storage_paths
+      loop:
+        - "{{ NGINX_MANAGER_DATA_STORE_PATH }}"
+        - "{{ PI_HOLE_CONFIG_STORAGE_PATH }}"
+        - "{{ OLLAMA_MODELS_PATH }}"
+        - "{{ COMFYUI_DATA_PATH }}"
+        - "{{ OPEN_WEBUI_DATA_PATH }}"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Display storage path status
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: {{ '✅ Exists' if item.stat.exists else '❌ NOT found' }}"
+      loop: "{{ storage_paths.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    # Firewalld Verification
+    - name: Check firewalld self-hosted zone
+      ansible.builtin.command: firewall-cmd --zone=self-hosted --list-all
+      register: firewall_zone
+      failed_when: false
+      changed_when: false
+      become: true
+
+    - name: Display firewalld zone status
+      ansible.builtin.debug:
+        msg: "{{ '✅ Firewalld self-hosted zone configured' if firewall_zone.rc == 0 else '⚠️  Firewalld zone not configured' }}"
+
+    # Final Summary
+    - name: Collect verification results
+      ansible.builtin.set_fact:
+        verification_results:
+          docker_running: "{{ docker_service.status.ActiveState == 'active' }}"
+          nginx_running: "{{ 'nginx-proxy-manager' in containers_status.stdout }}"
+          pihole_running: "{{ 'pihole' in containers_status.stdout }}"
+          ollama_running: "{{ 'ollama' in containers_status.stdout }}"
+          comfyui_running: "{{ 'comfyui' in containers_status.stdout }}"
+          openwebui_running: "{{ 'open-webui' in containers_status.stdout }}"
+          ollama_gpu: "{{ ollama_gpu.rc == 0 }}"
+          comfyui_gpu: "{{ comfyui_gpu.rc == 0 }}"
+          network_exists: "{{ network_check.rc == 0 }}"
+          nginx_accessible: "{{ nginx_health.status == 200 }}"
+          pihole_accessible: "{{ pihole_web.status == 200 }}"
+
+    - name: Display verification summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================="
+          - "Service Verification Summary"
+          - "=========================================="
+          - ""
+          - "Infrastructure:"
+          - "  Docker Service: {{ '✅' if verification_results.docker_running else '❌' }}"
+          - "  Docker Network: {{ '✅' if verification_results.network_exists else '❌' }}"
+          - "  Firewalld Zone: {{ '✅' if firewall_zone.rc == 0 else '⚠️' }}"
+          - ""
+          - "Core Services:"
+          - "  NGINX Proxy Manager: {{ '✅' if verification_results.nginx_running else '❌' }} {{ '(accessible)' if verification_results.nginx_accessible else '' }}"
+          - "  Pi-hole: {{ '✅' if verification_results.pihole_running else '❌' }} {{ '(accessible)' if verification_results.pihole_accessible else '' }}"
+          - ""
+          - "AI Services:"
+          - "  Ollama: {{ '✅' if verification_results.ollama_running else '❌' }} {{ '(GPU enabled)' if verification_results.ollama_gpu else '(CPU mode)' }}"
+          - "  ComfyUI: {{ '✅' if verification_results.comfyui_running else '❌' }} {{ '(GPU enabled)' if verification_results.comfyui_gpu else '(CPU mode)' }}"
+          - "  Open WebUI: {{ '✅' if verification_results.openwebui_running else '❌' }}"
+          - ""
+          - "Access URLs (via Tailscale VPN):"
+          - "  NGINX Admin: http://{{ TAILSCALE_IP_ADDRESS }}:81"
+          - "  Pi-hole Admin: http://{{ TAILSCALE_IP_ADDRESS }}/admin"
+          - ""
+          - "Next Steps:"
+          - "1. Configure NGINX Proxy Manager proxy hosts:"
+          - "   - chat.yourdomain.local → open-webui:3000"
+          - "   - ollama.yourdomain.local → ollama:11434"
+          - "   - comfy.yourdomain.local → comfyui:8188"
+          - ""
+          - "2. Download AI models:"
+          - "   docker exec -it ollama ollama pull llama2"
+          - ""
+          - "3. Access services via NGINX proxies"
+          - "=========================================="
+
+    - name: Check for critical failures
+      ansible.builtin.fail:
+        msg: |
+          ❌ Critical services are not running!
+          Please check the logs:
+            docker logs nginx-proxy-manager
+            docker logs pihole
+            docker logs ollama
+            docker logs comfyui
+            docker logs open-webui
+      when: >
+        not verification_results.docker_running or
+        not verification_results.nginx_running or
+        not verification_results.ollama_running
+
+    - name: Display success message
+      ansible.builtin.debug:
+        msg:
+          - ""
+          - "🎉 All services are running successfully!"
+          - ""
+          - "Your homelab is ready to use!"
+      when: >
+        verification_results.docker_running and
+        verification_results.nginx_running and
+        verification_results.ollama_running

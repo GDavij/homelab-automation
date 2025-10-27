@@ -1,0 +1,183 @@
+#!/bin/bash
+# jinja-shell
+# ==============================================================================
+# PostgreSQL Backup Script
+# Ansible-managed file - DO NOT EDIT MANUALLY
+# ==============================================================================
+
+set -euo pipefail  # Exit on error, undefined variables, pipe failures
+
+# Configuration
+# ------------------------------------------------------------------------------
+BACKUP_DIR="{{ POSTGRESQL_BACKUP_PATH }}"
+DAILY_DIR="${BACKUP_DIR}/daily"
+WEEKLY_DIR="${BACKUP_DIR}/weekly"
+MONTHLY_DIR="${BACKUP_DIR}/monthly"
+LOGS_DIR="{{ POSTGRESQL_LOGS_PATH }}"
+TIMESTAMP=$(date +%Y-%m-%d_%H-%M-%S)
+DAY_OF_WEEK=$(date +%u)  # 1=Monday, 7=Sunday
+DAY_OF_MONTH=$(date +%d)
+HOSTNAME="{{ ansible_hostname }}"
+
+# Database connection
+POSTGRES_HOST="{{ TAILSCALE_IP_ADDRESS }}"
+POSTGRES_PORT="{{ POSTGRESQL_PORT }}"
+POSTGRES_USER="{{ POSTGRES_ADMIN_USER }}"
+export PGPASSWORD="{{ POSTGRES_ADMIN_PASSWORD }}"
+
+# Backup retention (days)
+DAILY_RETENTION={{ POSTGRES_BACKUP_RETENTION_DAILY }}
+WEEKLY_RETENTION={{ POSTGRES_BACKUP_RETENTION_WEEKLY }}
+MONTHLY_RETENTION={{ POSTGRES_BACKUP_RETENTION_MONTHLY }}
+
+# Encryption settings
+ENABLE_ENCRYPTION={{ POSTGRES_BACKUP_ENABLE_ENCRYPTION | lower }}
+{% if POSTGRES_BACKUP_ENABLE_ENCRYPTION %}
+GPG_RECIPIENT="{{ POSTGRES_BACKUP_GPG_RECIPIENT }}"
+{% endif %}
+
+# Logging function
+# ------------------------------------------------------------------------------
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*" | tee -a "${LOGS_DIR}/backup.log"
+}
+
+# Error handler
+# ------------------------------------------------------------------------------
+error_exit() {
+    log "ERROR: $1"
+    exit 1
+}
+
+# Create backup directories
+# ------------------------------------------------------------------------------
+mkdir -p "${DAILY_DIR}" "${WEEKLY_DIR}" "${MONTHLY_DIR}" "${LOGS_DIR}"
+
+log "Starting PostgreSQL backup on ${HOSTNAME}"
+
+# Get list of databases (exclude templates)
+# ------------------------------------------------------------------------------
+DATABASES=$(docker exec postgresql-db psql -h localhost -U "${POSTGRES_USER}" -t -c \
+    "SELECT datname FROM pg_database WHERE datistemplate = false AND datname != 'postgres';" | \
+    grep -v '^$' | xargs)
+
+if [ -z "${DATABASES}" ]; then
+    log "WARNING: No user databases found, backing up postgres only"
+    DATABASES="postgres"
+fi
+
+log "Databases to backup: ${DATABASES}"
+
+# Backup each database
+# ------------------------------------------------------------------------------
+for DB in ${DATABASES}; do
+    log "Backing up database: ${DB}"
+    
+    BACKUP_FILE="${DAILY_DIR}/${DB}_${TIMESTAMP}.sql"
+    
+    # Create backup using pg_dump
+    if docker exec postgresql-db pg_dump -h localhost -U "${POSTGRES_USER}" \
+        --format=plain \
+        --no-owner \
+        --no-acl \
+        --clean \
+        --if-exists \
+        "${DB}" > "${BACKUP_FILE}"; then
+        log "Database backup successful: ${BACKUP_FILE}"
+    else
+        error_exit "Failed to backup database: ${DB}"
+    fi
+    
+    # Compress backup
+    log "Compressing backup..."
+    if gzip "${BACKUP_FILE}"; then
+        BACKUP_FILE="${BACKUP_FILE}.gz"
+        log "Compression successful"
+    else
+        error_exit "Failed to compress backup"
+    fi
+    
+    # Encrypt backup (optional)
+    if [ "${ENABLE_ENCRYPTION}" = "true" ]; then
+        log "Encrypting backup with GPG..."
+        if gpg --encrypt --recipient "${GPG_RECIPIENT}" --output "${BACKUP_FILE}.gpg" "${BACKUP_FILE}"; then
+            rm -f "${BACKUP_FILE}"  # Remove unencrypted file
+            BACKUP_FILE="${BACKUP_FILE}.gpg"
+            log "Encryption successful"
+        else
+            error_exit "Failed to encrypt backup"
+        fi
+    fi
+    
+    # Calculate backup size
+    BACKUP_SIZE=$(du -h "${BACKUP_FILE}" | cut -f1)
+    log "Backup size: ${BACKUP_SIZE}"
+    
+    # Copy to weekly/monthly directories
+    if [ "${DAY_OF_WEEK}" -eq 1 ]; then
+        log "Creating weekly backup copy"
+        cp "${BACKUP_FILE}" "${WEEKLY_DIR}/"
+    fi
+    
+    if [ "${DAY_OF_MONTH}" -eq 01 ]; then
+        log "Creating monthly backup copy"
+        cp "${BACKUP_FILE}" "${MONTHLY_DIR}/"
+    fi
+done
+
+# Backup PostgreSQL globals (roles, tablespaces)
+# ------------------------------------------------------------------------------
+log "Backing up PostgreSQL globals (roles, tablespaces)"
+GLOBALS_FILE="${DAILY_DIR}/globals_${TIMESTAMP}.sql"
+
+if docker exec postgresql-db pg_dumpall -h localhost -U "${POSTGRES_USER}" \
+    --globals-only > "${GLOBALS_FILE}"; then
+    log "Globals backup successful"
+    gzip "${GLOBALS_FILE}"
+    
+    if [ "${ENABLE_ENCRYPTION}" = "true" ]; then
+        gpg --encrypt --recipient "${GPG_RECIPIENT}" --output "${GLOBALS_FILE}.gz.gpg" "${GLOBALS_FILE}.gz"
+        rm -f "${GLOBALS_FILE}.gz"
+    fi
+else
+    log "WARNING: Failed to backup globals"
+fi
+
+# Cleanup old backups (retention policy)
+# ------------------------------------------------------------------------------
+log "Applying retention policy..."
+
+# Daily backups
+DAILY_COUNT=$(find "${DAILY_DIR}" -type f -name "*.sql.gz*" | wc -l)
+if [ "${DAILY_COUNT}" -gt "${DAILY_RETENTION}" ]; then
+    log "Removing daily backups older than ${DAILY_RETENTION} days"
+    find "${DAILY_DIR}" -type f -name "*.sql.gz*" -mtime +${DAILY_RETENTION} -delete
+fi
+
+# Weekly backups
+WEEKLY_COUNT=$(find "${WEEKLY_DIR}" -type f -name "*.sql.gz*" | wc -l)
+if [ "${WEEKLY_COUNT}" -gt "${WEEKLY_RETENTION}" ]; then
+    log "Removing weekly backups older than ${WEEKLY_RETENTION} days"
+    find "${WEEKLY_DIR}" -type f -name "*.sql.gz*" -mtime +${WEEKLY_RETENTION} -delete
+fi
+
+# Monthly backups
+MONTHLY_COUNT=$(find "${MONTHLY_DIR}" -type f -name "*.sql.gz*" | wc -l)
+if [ "${MONTHLY_COUNT}" -gt "${MONTHLY_RETENTION}" ]; then
+    log "Removing monthly backups older than ${MONTHLY_RETENTION} days"
+    find "${MONTHLY_DIR}" -type f -name "*.sql.gz*" -mtime +${MONTHLY_RETENTION} -delete
+fi
+
+# Summary
+# ------------------------------------------------------------------------------
+TOTAL_BACKUP_SIZE=$(du -sh "${BACKUP_DIR}" | cut -f1)
+log "Backup completed successfully"
+log "Total backup directory size: ${TOTAL_BACKUP_SIZE}"
+log "Daily backups: $(find "${DAILY_DIR}" -type f -name "*.sql.gz*" | wc -l)"
+log "Weekly backups: $(find "${WEEKLY_DIR}" -type f -name "*.sql.gz*" | wc -l)"
+log "Monthly backups: $(find "${MONTHLY_DIR}" -type f -name "*.sql.gz*" | wc -l)"
+
+# Clean up password from environment
+unset PGPASSWORD
+
+exit 0
