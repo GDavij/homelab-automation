@@ -1,0 +1,13 @@
+---
+# ==============================================================================
+# Common Role - Variables
+# ==============================================================================
+# Shared variables used across all roles
+# This role provides base Docker functionality and common utilities
+# ==============================================================================
+
+# No specific variables needed - this role uses variables from all.yml
+# Common tasks include:
+# - Ensuring Docker is installed and running
+# - Setting up base directories
+# - Installing common utilities

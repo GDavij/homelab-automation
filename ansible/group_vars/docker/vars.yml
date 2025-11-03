@@ -1,0 +1,16 @@
+---
+# ==============================================================================
+# Docker Role - Variables
+# ==============================================================================
+# Docker installation and configuration variables
+# See: docs/ENVIRONMENT_VARIABLES.md#docker
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Docker Configuration
+# ------------------------------------------------------------------------------
+# Most Docker configuration is handled by the role itself
+# Custom networks and storage paths are defined in all.yml
+
+# Docker Compose version is managed by system package manager
+# Networks created: self-hosted (for internal container communication)

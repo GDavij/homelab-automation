@@ -21,10 +21,8 @@ PGADMIN_DATA_PATH: "{{ COLD_STORAGE_PATH }}/database/pgadmin/data"  # pgAdmin se
 # ------------------------------------------------------------------------------
 # Network Configuration
 # ------------------------------------------------------------------------------
-PGADMIN_PORT: 5050        # pgAdmin web UI port (internal only)
+PGADMIN_PORT: 5050        # pgAdmin web UI port
 PGADMIN_ENABLED: true     # Enable/disable pgAdmin deployment (set to true to deploy)
-
-# Nginx Proxy Configuration
 PGADMIN_PROXY_HOST: "pg.homelab"  # Domain for nginx proxy access
 
 # ------------------------------------------------------------------------------
@@ -37,11 +35,11 @@ PGADMIN_EMAIL: "pgadmin_autogen@example.net"  # Login email for pgAdmin
 # ==============================================================================
 # Service Information
 # ==============================================================================
-# - Web UI: https://pg.homelab (via Nginx Proxy Manager)
-# - Internal Port: 5050 (not exposed externally)
+# - Web UI: https://pg.homelab (via nginx proxy - internal only, no direct port access)
+# - Internal Access: http://pgadmin:5050 (from other Docker containers)
 # - Login: Use PGADMIN_EMAIL and PGADMIN_PASSWORD
 # - Add PostgreSQL server:
-#   * Host: postgresql (container name)
+#   * Host: postgresql (container name on self-hosted network)
 #   * Port: 5432
 #   * Username: dbadmin_autogen (or postgres)
 #   * Password: From postgres/secrets.yml
