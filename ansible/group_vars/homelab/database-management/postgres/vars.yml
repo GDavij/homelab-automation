@@ -44,8 +44,8 @@ POSTGRES_MAINTENANCE_WORK_MEM: "256MB"      # Memory for VACUUM, CREATE INDEX
 # ------------------------------------------------------------------------------
 # Admin Configuration
 # ------------------------------------------------------------------------------
-POSTGRES_ADMIN_USER: "dbadmin_autogen"  # Admin username with CREATEDB, CREATEROLE privileges
-POSTGRES_ADMIN_EMAIL: "dbadmin_autogen@example.net"  # Admin email for documentation
+POSTGRES_ADMIN_USER: "root"  # Admin username with CREATEDB, CREATEROLE privileges
+POSTGRES_ADMIN_EMAIL: "admin@example.com"  # Admin email for documentation
 # Passwords stored in database-management/postgres/secrets.yml:
 #   - POSTGRES_ROOT_PASSWORD (postgres superuser)
 #   - POSTGRES_ADMIN_PASSWORD (dbadmin_autogen user)
@@ -102,7 +102,7 @@ POSTGRES_DATABASES: []
 # See: docs/POSTGRES_DATABASE_MANAGEMENT.md#user-definitions for schema
 
 # Start with empty list - add users as needed
-POSTGRES_DATABASE_USERS: []
+POSTGRES_DATABASE_USERS: [ ]
 #
 # Example (in postgres/secrets.yml):
 # POSTGRES_DATABASE_USERS:

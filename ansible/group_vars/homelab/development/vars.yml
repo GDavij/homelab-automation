@@ -46,6 +46,6 @@ DOTNET_PACKAGE: "dotnet-sdk-{{ DOTNET_VERSION }}"
 # Installation Control Flags
 # ------------------------------------------------------------------------------
 # Set to true to skip installation of specific tools
-DEVELOPMENT_SKIP_PYTHON: false
-DEVELOPMENT_SKIP_NODEJS: false
-DEVELOPMENT_SKIP_DOTNET: false
+DEVELOPMENT_SKIP_PYTHON: true
+DEVELOPMENT_SKIP_NODEJS: true
+DEVELOPMENT_SKIP_DOTNET: true

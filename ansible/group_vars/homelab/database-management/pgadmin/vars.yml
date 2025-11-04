@@ -28,7 +28,7 @@ PGADMIN_PROXY_HOST: "pg.homelab"  # Domain for nginx proxy access
 # ------------------------------------------------------------------------------
 # pgAdmin Configuration
 # ------------------------------------------------------------------------------
-PGADMIN_EMAIL: "pgadmin_autogen@example.net"  # Login email for pgAdmin
+PGADMIN_EMAIL: "admin@example.com"  # Login email for pgAdmin
 # Password stored in database-management/pgadmin/secrets.yml: PGADMIN_PASSWORD
 
 

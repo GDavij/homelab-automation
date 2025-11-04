@@ -8,18 +8,18 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{{ POSTGRES_ADMIN_USER }}') THEN
         CREATE ROLE {{ POSTGRES_ADMIN_USER }} WITH
             LOGIN
-            PASSWORD '{{ POSTGRES_ADMIN_PASSWORD }}'
+            PASSWORD '{{ POSTGRES_ADMIN_PASSWORD | replace("'", "''") }}'
             CREATEDB
             CREATEROLE
             REPLICATION
             BYPASSRLS
             CONNECTION LIMIT -1;
         
-        COMMENT ON ROLE {{ POSTGRES_ADMIN_USER }} IS 'Administrative role for database management ({{ POSTGRES_ADMIN_EMAIL }})';
+        COMMENT ON ROLE {{ POSTGRES_ADMIN_USER }} IS 'Administrative role for database management ({{ POSTGRES_ADMIN_EMAIL | replace("'", "''") }})';
         RAISE NOTICE 'Created {{ POSTGRES_ADMIN_USER }} role';
     ELSE
         -- Update password if role already exists
-        ALTER ROLE {{ POSTGRES_ADMIN_USER }} WITH PASSWORD '{{ POSTGRES_ADMIN_PASSWORD }}';
+        ALTER ROLE {{ POSTGRES_ADMIN_USER }} WITH PASSWORD '{{ POSTGRES_ADMIN_PASSWORD | replace("'", "''") }}';
         RAISE NOTICE 'Updated {{ POSTGRES_ADMIN_USER }} role password';
     END IF;
 END
