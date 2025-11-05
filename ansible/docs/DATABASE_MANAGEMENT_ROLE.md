@@ -386,7 +386,7 @@ roles/database-management/
 
 **Purpose**: Role entry point and orchestrator  
 **Responsibilities**:
-- Determine which database engine to deploy (based on `DATABASE_ENGINE`)
+- Deploy all implemented database engines
 - Include engine-specific task files
 - Include pgAdmin tasks if enabled
 - Apply tags for selective execution
@@ -395,13 +395,10 @@ roles/database-management/
 ```yaml
 # Deploy PostgreSQL
 - include_tasks: postgres/main.yml
-  when: DATABASE_ENGINE == 'postgres'
   
 # Deploy pgAdmin (optional)
 - include_tasks: pgadmin/deploy.yml
-  when: 
-    - DATABASE_ENGINE == 'postgres'
-    - PGADMIN_ENABLED | bool
+  when: PGADMIN_ENABLED | bool
 ```
 
 **Tags**: `database`, `database-management`, `postgres`, `pgadmin`, `database-bkp`
@@ -833,14 +830,6 @@ These **must** be defined in `group_vars/database-management/postgres/secrets.ym
 POSTGRES_ROOT_PASSWORD: "your_secure_password"
 POSTGRES_ADMIN_PASSWORD: "your_admin_password"
 PGADMIN_PASSWORD: "your_pgadmin_password"  # If PGADMIN_ENABLED: true
-```
-
-### Engine Configuration
-
-Defined in `group_vars/database-management/engine.yml`:
-
-```yaml
-DATABASE_ENGINE: "postgres"  # Options: postgres, sqlserver, oracle (future)
 ```
 
 ### PostgreSQL Configuration

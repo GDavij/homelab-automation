@@ -33,9 +33,6 @@ Ansible role for deploying and managing database engines with PostgreSQL 16 + pg
 
 **Edit `group_vars/homelab.yml`:**
 ```yaml
-# Database engine selection
-DATABASE_ENGINE: "postgres"
-
 # Storage paths
 POSTGRESQL_DATA_PATH: "{{ COLD_STORAGE_PATH }}/database/postgresql/data"
 
@@ -115,7 +112,6 @@ All variables are organized in `group_vars/` following project standards:
 
 | Category | Variables |
 |----------|-----------|
-| **Engine Selection** | `DATABASE_ENGINE` |
 | **PostgreSQL Version** | `POSTGRESQL_VERSION`, `PGADMIN_VERSION` |
 | **Storage Paths** | `POSTGRESQL_DATA_PATH`, `POSTGRESQL_BACKUP_PATH`, etc. |
 | **Network** | `POSTGRESQL_PORT`, `PGADMIN_PORT`, `PGADMIN_ENABLED` |
@@ -248,12 +244,12 @@ roles/database-management/
 
 ### Multi-Engine Design
 
-The role is designed to support multiple database engines:
+The role is designed to support multiple database engines simultaneously:
 
 - **Current:** PostgreSQL 16 with pgvector (`tasks/postgres/`, `templates/postgres/`)
 - **Future:** SQL Server (`tasks/sqlserver/`), Oracle (`tasks/oracle/`)
 
-Engine selection via `DATABASE_ENGINE` variable in `group_vars/homelab.yml`.
+All implemented engines are deployed when the role is executed.
 
 **See:** `tasks/README.md` for adding new engines.
 
@@ -384,9 +380,6 @@ TAILSCALE_IP: "100.64.x.x"  # Your Tailscale node IP
 ### Database Configuration
 
 ```yaml
-# Select database engine (default: postgres)
-DATABASE_ENGINE: "postgres"  # Options: postgres, sqlserver (future), oracle (future)
-
 # Define databases with per-database settings
 POSTGRES_DATABASES:
   - name: langfuse_db
@@ -698,11 +691,11 @@ roles/database-management/
 
 ## Task Structure
 
-The role uses a modular architecture for supporting multiple database engines:
+The role uses a modular architecture for supporting multiple database engines simultaneously:
 
 - **Engine-agnostic tasks**: `validate.yml`, `setup-storage.yml`, `configure-backups.yml`, `verify.yml`
 - **Engine-specific tasks**: Located in `tasks/<engine>/` subfolders (e.g., `tasks/postgres/`)
-- **Engine selection**: Controlled by `DATABASE_ENGINE` variable in `group_vars/homelab.yml`
+- **Deployment**: All implemented engine tasks are executed when the role runs
 
 See `tasks/README.md` for instructions on adding new database engines.
 

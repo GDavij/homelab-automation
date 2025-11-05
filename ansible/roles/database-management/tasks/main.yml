@@ -15,15 +15,14 @@
 # ==============================================================================
 
 # ==============================================================================
-# Database Engine Selection
+# Database Engine Deployment
 # ==============================================================================
-# Include engine-specific tasks based on DATABASE_ENGINE variable
-# Default: postgres
+# Deploy PostgreSQL database engine
+# Note: Multiple database engines can be deployed simultaneously
 # ==============================================================================
 
 - name: Deploy PostgreSQL database engine
   ansible.builtin.include_tasks: postgres/main.yml
-  when: DATABASE_ENGINE | default('postgres') == 'postgres'
   tags:
     - database
     - database-management
@@ -36,9 +35,7 @@
 
 - name: Deploy pgAdmin management interface
   ansible.builtin.include_tasks: pgadmin/deploy.yml
-  when:
-    - DATABASE_ENGINE | default('postgres') == 'postgres'
-    - PGADMIN_ENABLED | default(false)
+  when: PGADMIN_ENABLED | default(false)
   tags:
     - database
     - database-management
@@ -46,9 +43,7 @@
 
 - name: Verify pgAdmin deployment
   ansible.builtin.include_tasks: pgadmin/verify.yml
-  when:
-    - DATABASE_ENGINE | default('postgres') == 'postgres'
-    - PGADMIN_ENABLED | default(false)
+  when: PGADMIN_ENABLED | default(false)
   tags:
     - database
     - database-management
@@ -59,10 +54,9 @@
 # Future Database Engines
 # ==============================================================================
 
-# Future engine implementations:
+# Future engine implementations can be added without conditional logic:
 # - name: Deploy SQL Server database engine
 #   ansible.builtin.include_tasks: sqlserver/main.yml
-#   when: DATABASE_ENGINE == 'sqlserver'
 #   tags:
 #     - database
 #     - database-management
@@ -71,7 +65,6 @@
 #
 # - name: Deploy Oracle database engine
 #   ansible.builtin.include_tasks: oracle/main.yml
-#   when: DATABASE_ENGINE == 'oracle'
 #   tags:
 #     - database
 #     - database-management
