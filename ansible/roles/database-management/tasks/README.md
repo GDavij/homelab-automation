@@ -59,12 +59,11 @@ Create files like:
 
 ### 4. Update Main Orchestration
 
-Uncomment and configure the engine block in `tasks/main.yml`:
+Add the engine block in `tasks/main.yml`:
 
 ```yaml
 - name: Deploy SQL Server database engine
   ansible.builtin.include_tasks: sqlserver/main.yml
-  when: DATABASE_ENGINE == 'sqlserver'
   tags:
     - database
     - database-management
@@ -93,17 +92,21 @@ Modify `configure-backups.yml` to support engine-specific backup methods:
   ansible.builtin.template:
     src: backup-script-sqlserver.sh.j2
     dest: /usr/local/bin/sqlserver-backup.sh
-  when: DATABASE_ENGINE == 'sqlserver'
 ```
 
-## Engine Selection
+## Multiple Database Engines
 
-Set the database engine in `group_vars/homelab.yml`:
+The role supports deploying multiple database engines simultaneously. Each engine's tasks are executed independently when the role runs. To deploy a specific engine, use tags:
 
-```yaml
-DATABASE_ENGINE: "postgres"    # Default
-# DATABASE_ENGINE: "sqlserver" # For SQL Server
-# DATABASE_ENGINE: "oracle"    # For Oracle
+```bash
+# Deploy only PostgreSQL
+ansible-playbook server_playbook.yml --tags postgres
+
+# Deploy only SQL Server (when implemented)
+ansible-playbook server_playbook.yml --tags sqlserver
+
+# Deploy all database engines
+ansible-playbook server_playbook.yml --tags database
 ```
 
 ## Engine-Specific Tags
@@ -163,9 +166,6 @@ cat > tasks/sqlserver/deploy-sqlserver.yml << 'EOF'
     source: pull
 EOF
 
-# 4. Update group_vars
-echo "DATABASE_ENGINE: sqlserver" >> group_vars/homelab.yml
-
-# 5. Deploy
+# 4. Deploy
 ansible-playbook server_playbook.yml --tags database
 ```

@@ -242,14 +242,9 @@ All AI services use NVIDIA RTX 3060 12GB GPU for acceleration.
 
 **File:** `group_vars/homelab.yml`
 
-### Engine Selection
+### Overview
 
-| Variable | Type | Default | Options | Description |
-|----------|------|---------|---------|-------------|
-| `DATABASE_ENGINE` | string | `"postgres"` | `postgres`, `sqlserver`, `oracle` | Database engine to deploy |
-
-**Current Support:** PostgreSQL 16 with pgvector
-**Future Support:** SQL Server, Oracle (architecture ready)
+The database-management role supports multiple database engines simultaneously. PostgreSQL 16 with pgvector is currently implemented. Future support for SQL Server and Oracle is planned (architecture ready).
 
 ---
 
